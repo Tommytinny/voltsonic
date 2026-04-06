@@ -1,0 +1,94 @@
+<!doctype html>
+<html class="dark" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VoltSonic</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-fixed-dim": "#003ecb",
+              "tertiary-fixed-dim": "#b091ff",
+              "on-surface": "#dee5ff",
+              "on-secondary-fixed-variant": "#005966",
+              "on-primary-fixed": "#d9e7ff",
+              "surface-container": "#0f1930",
+              "error-container": "#b92902",
+              "tertiary-fixed": "#bda2ff",
+              "on-primary-container": "#d9e7ff",
+              "surface-bright": "#1f2b49",
+              primary: "#0052ff",
+              "on-tertiary-fixed-variant": "#4600a8",
+              "on-primary": "#f5f9ff",
+              tertiary: "#ac8aff",
+              "surface-container-lowest": "#000000",
+              "surface-container-high": "#141f38",
+              "inverse-on-surface": "#4d556b",
+              "on-primary-fixed-variant": "#c3d8ff",
+              "inverse-primary": "#7fb0ff",
+              "secondary-fixed-dim": "#29d6f1",
+              "on-error-container": "#ffd2c8",
+              background: "#060e20",
+              "error-dim": "#d53d18",
+              "tertiary-container": "#8f60fa",
+              outline: "#6d758c",
+              "inverse-surface": "#faf8ff",
+              "primary-dim": "#003ecb",
+              "primary-fixed": "#1f6fff",
+              "on-secondary-fixed": "#003a43",
+              "on-error": "#450900",
+              "secondary-dim": "#1ad0eb",
+              "on-tertiary-container": "#000000",
+              "secondary-fixed": "#48e4ff",
+              "on-tertiary": "#280067",
+              "on-tertiary-fixed": "#1f0052",
+              "outline-variant": "#40485d",
+              error: "#ff7351",
+              "surface-tint": "#0052ff",
+              "surface-dim": "#060e20",
+              "surface-container-highest": "#192540",
+              "on-background": "#dee5ff",
+              "surface-container-low": "#091328",
+              "secondary-container": "#006877",
+              "primary-container": "#0a4ae0",
+              surface: "#060e20",
+              "on-secondary": "#004b56",
+              "on-surface-variant": "#a3aac4",
+              "on-secondary-container": "#eafbff",
+              "tertiary-dim": "#8455ef",
+              "surface-variant": "#192540",
+              secondary: "#3adffa",
+            },
+            fontFamily: {
+              headline: ["Space Grotesk"],
+              body: ["Manrope"],
+              label: ["Space Grotesk"],
+            },
+            borderRadius: {
+              DEFAULT: "0px",
+              lg: "0px",
+              xl: "0px",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+  </html>

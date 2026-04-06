@@ -1,0 +1,95 @@
+Metadata-Version: 2.4
+Name: voltsonic-backend
+Version: 0.1.0
+Summary: FastAPI + PostgreSQL backend for VoltSonic
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<1.0.0,>=0.115.0
+Requires-Dist: uvicorn[standard]<1.0.0,>=0.30.0
+Requires-Dist: sqlalchemy<3.0.0,>=2.0.36
+Requires-Dist: asyncpg<1.0.0,>=0.30.0
+Requires-Dist: psycopg[binary]<4.0.0,>=3.2.0
+Requires-Dist: alembic<2.0.0,>=1.14.0
+Requires-Dist: pydantic-settings<3.0.0,>=2.6.0
+Requires-Dist: web3<8.0.0,>=7.6.0
+
+# VoltSonic Backend
+
+FastAPI + PostgreSQL backend for VoltSonic.
+
+## What it gives you
+
+- a structured API layer for read-heavy frontend screens
+- PostgreSQL-backed storage for indexed rounds and bets
+- a contract indexer entrypoint so the frontend can stop relying on broad `eth_getLogs`
+
+## Quick start
+
+1. Copy env values:
+
+```bash
+cp .env.example .env
+```
+
+2. Start PostgreSQL:
+
+```bash
+docker compose up -d
+```
+
+If you already started the older scaffold once, reset the local Postgres volume before first run of this indexer version so the new columns and `sync_state` table are created cleanly:
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+3. Create and activate a virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+4. Install dependencies into the virtual environment:
+
+```bash
+pip install -e .
+```
+
+5. Run the API:
+
+```bash
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+6. Open docs:
+
+`http://127.0.0.1:8000/docs`
+
+7. Trigger a sync:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/sync
+```
+
+## Current routes
+
+- `GET /health`
+- `GET /api/v1/rounds`
+- `GET /api/v1/rounds/{round_id}`
+- `GET /api/v1/bets`
+- `GET /api/v1/bets/{bet_id}`
+- `GET /api/v1/bets/recent/open`
+- `GET /api/v1/bets/recent/closed`
+- `GET /api/v1/rounds/latest/result`
+- `POST /api/v1/sync`
+
+## Env you should set
+
+- `VOLTSONIC_RPC_URL`
+- `VOLTSONIC_CONTRACT_ADDRESS`
+- `INDEXER_START_BLOCK`
+- `INDEXER_BLOCK_CHUNK_SIZE`
+
+The default chunk size is `10` blocks to stay compatible with tight free-tier RPC log limits.

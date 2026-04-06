@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>VOLTSONIC - Game Dashboard</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-fixed-dim": "#eec200",
+              "tertiary-fixed-dim": "#b091ff",
+              "on-surface": "#dee5ff",
+              "on-secondary-fixed-variant": "#005966",
+              "on-primary-fixed": "#433500",
+              "surface-container": "#0f1930",
+              "error-container": "#b92902",
+              "tertiary-fixed": "#bda2ff",
+              "on-primary-container": "#574500",
+              "surface-bright": "#1f2b49",
+              primary: "#ffdd73",
+              "on-tertiary-fixed-variant": "#4600a8",
+              "on-primary": "#624e00",
+              tertiary: "#ac8aff",
+              "surface-container-lowest": "#000000",
+              "surface-container-high": "#141f38",
+              "inverse-on-surface": "#4d556b",
+              "on-primary-fixed-variant": "#645000",
+              "inverse-primary": "#735c00",
+              "secondary-fixed-dim": "#29d6f1",
+              "on-error-container": "#ffd2c8",
+              background: "#060e20",
+              "error-dim": "#d53d18",
+              "tertiary-container": "#8f60fa",
+              outline: "#6d758c",
+              "inverse-surface": "#faf8ff",
+              "primary-dim": "#eec200",
+              "primary-fixed": "#fed01b",
+              "on-secondary-fixed": "#003a43",
+              "on-error": "#450900",
+              "secondary-dim": "#1ad0eb",
+              "on-tertiary-container": "#000000",
+              "secondary-fixed": "#48e4ff",
+              "on-tertiary": "#280067",
+              "on-tertiary-fixed": "#1f0052",
+              "outline-variant": "#40485d",
+              error: "#ff7351",
+              "surface-tint": "#ffdd73",
+              "surface-dim": "#060e20",
+              "surface-container-highest": "#192540",
+              "on-background": "#dee5ff",
+              "surface-container-low": "#091328",
+              "secondary-container": "#006877",
+              "primary-container": "#fbcd16",
+              surface: "#060e20",
+              "on-secondary": "#004b56",
+              "on-surface-variant": "#a3aac4",
+              "on-secondary-container": "#eafbff",
+              "tertiary-dim": "#8455ef",
+              "surface-variant": "#192540",
+              secondary: "#3adffa",
+            },
+            fontFamily: {
+              headline: ["Space Grotesk"],
+              body: ["Manrope"],
+              label: ["Space Grotesk"],
+            },
+            borderRadius: {
+              DEFAULT: "0px",
+              lg: "0px",
+              xl: "0px",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        background-color: #060e20;
+        background-image:
+          linear-gradient(rgba(64, 72, 93, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(64, 72, 93, 0.05) 1px, transparent 1px);
+        background-size: 20px 20px;
+        font-family: "Manrope", sans-serif;
+      }
+
+      .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+      }
+
+      .glow-primary {
+        box-shadow: 0 0 15px rgba(250, 204, 21, 0.4);
+      }
+
+      .glass-panel {
+        background: rgba(25, 37, 64, 0.6);
+        backdrop-filter: blur(12px);
+      }
+
+      .pulse-line {
+        background: linear-gradient(90deg, transparent, #ffdd73, transparent);
+      }
+
+      .circuit-border {
+        position: relative;
+      }
+
+      .circuit-border::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border: 1px solid rgba(255, 221, 115, 0.12);
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen overflow-x-hidden bg-background pb-24 text-on-surface selection:bg-primary selection:text-on-primary">
+    <header class="sticky top-0 z-50 flex w-full max-w-none items-center justify-between border-b border-yellow-400/20 bg-[#060e20] px-6 py-4 text-yellow-400">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-yellow-400">bolt</span>
+        <h1 class="font-headline text-2xl font-black uppercase tracking-tighter text-yellow-400">VOLTSONIC</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <input
+          id="contract-address-input"
+          class="w-44 border border-outline-variant bg-surface-container-high px-3 py-2 text-[11px] font-mono uppercase tracking-wide text-on-surface placeholder:text-outline focus:border-primary focus:ring-0"
+          placeholder="Contract address"
+          type="text"
+        />
+        <button
+          id="save-contract-btn"
+          class="border border-outline-variant bg-surface-container-high px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-on-surface transition-colors hover:border-primary hover:text-primary"
+        >
+          Save
+        </button>
+        <a
+          class="border border-outline-variant bg-surface-container-high px-4 py-2 text-xs font-bold uppercase tracking-wider text-on-surface transition-colors hover:border-primary hover:text-primary"
+          href="./admin.html"
+        >
+          Admin Console
+        </a>
+        <button id="connect-wallet-btn" class="glow-primary bg-primary px-4 py-2 text-xs font-bold uppercase tracking-wider text-on-primary transition-colors hover:bg-yellow-300 active:scale-95">
+          Connect Wallet
+        </button>
+      </div>
+    </header>
+
+    <div class="w-full border-b border-outline-variant bg-surface-container-low px-6 py-4">
+      <div class="mx-auto grid max-w-7xl gap-4 md:grid-cols-4">
+        <div class="flex items-center justify-between border-l-2 border-primary pl-4">
+          <div>
+            <span class="font-mono text-[10px] uppercase tracking-widest text-outline">Wallet</span>
+            <div id="wallet-status" class="mt-1 text-sm font-bold text-on-surface">Not Connected</div>
+          </div>
+          <span class="material-symbols-outlined text-primary">account_balance_wallet</span>
+        </div>
+        <div class="flex items-center justify-between border-l-2 border-primary pl-4">
+          <div>
+            <span class="font-mono text-[10px] uppercase tracking-widest text-outline">Credits</span>
+            <div id="credits-balance" class="mt-1 text-sm font-bold text-primary">0.0000 $VOLT</div>
+          </div>
+          <span class="material-symbols-outlined text-primary">battery_charging_80</span>
+        </div>
+        <div class="flex items-center justify-between border-l-2 border-primary pl-4">
+          <div>
+            <span class="font-mono text-[10px] uppercase tracking-widest text-outline">Current Round</span>
+            <div id="current-round-display" class="mt-1 text-sm font-bold text-on-surface">#---</div>
+          </div>
+          <span class="material-symbols-outlined text-primary">hub</span>
+        </div>
+        <div class="flex items-center justify-between border-l-2 border-primary pl-4">
+          <div>
+            <span class="font-mono text-[10px] uppercase tracking-widest text-outline">Betting State</span>
+            <div id="betting-state-display" class="mt-1 text-sm font-bold text-primary">UNKNOWN</div>
+          </div>
+          <span class="material-symbols-outlined text-primary">power_settings_new</span>
+        </div>
+      </div>
+    </div>
+
+    <main class="mx-auto max-w-7xl space-y-8 px-4 py-6">
+      <section class="relative overflow-hidden border-l-2 border-primary bg-surface-container-low p-8">
+        <div class="absolute right-0 top-0 p-2 opacity-10">
+          <span class="material-symbols-outlined text-6xl">electric_bolt</span>
+        </div>
+        <div class="relative z-10 grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+          <div class="space-y-4">
+            <span class="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">Live Operations Board</span>
+            <h2 class="font-headline text-4xl font-black tracking-tighter text-on-surface">
+              Distinct player, treasury, and admin surfaces in one control deck.
+            </h2>
+            <p class="max-w-2xl text-sm leading-7 text-on-surface-variant">
+              This layout keeps the original VoltSonic visual identity while separating user actions, payout visibility, treasury metrics, and operator controls into production-style sections.
+            </p>
+          </div>
+          <div class="glass-panel circuit-border border border-outline-variant p-6">
+            <span class="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">Current Jackpot Pool</span>
+            <div class="mt-3 font-headline text-5xl font-black tracking-tighter text-primary drop-shadow-[0_0_12px_rgba(250,204,21,0.5)]">
+              <span id="jackpot-balance-display">0.00 ETH</span>
+            </div>
+            <div class="mt-6 grid grid-cols-3 gap-3">
+              <div class="border border-outline-variant bg-surface-container-high p-3">
+                <div class="font-mono text-[9px] uppercase text-outline">Min Bet</div>
+                <div id="min-bet-display" class="mt-2 text-sm font-bold text-on-surface">0.0000</div>
+              </div>
+              <div class="border border-outline-variant bg-surface-container-high p-3">
+                <div class="font-mono text-[9px] uppercase text-outline">Mode</div>
+                <div class="mt-2 text-sm font-bold text-on-surface">Dice + Parity</div>
+              </div>
+              <div class="border border-outline-variant bg-surface-container-high p-3">
+                <div class="font-mono text-[9px] uppercase text-outline">Status</div>
+                <div class="mt-2 text-sm font-bold text-primary">ACTIVE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pulse-line absolute bottom-0 left-0 h-[1px] w-full opacity-30"></div>
+      </section>
+
+      <section class="space-y-8">
+        <div class="space-y-8">
+          <section class="space-y-4">
+            <div class="flex justify-between items-end px-2">
+              <div>
+                <h2 class="font-headline text-xl font-bold uppercase tracking-tight">Player Betting Terminal</h2>
+                <span class="font-mono text-[10px] uppercase tracking-[0.3em] text-outline">Explicit Per-Game Entry</span>
+              </div>
+              <span class="font-mono text-[10px] text-outline">ROUND #012</span>
+            </div>
+
+            <div class="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
+              <div class="space-y-4">
+                <section class="space-y-4">
+                  <div class="flex justify-between items-end px-2">
+                    <h3 class="font-headline text-lg font-bold uppercase tracking-tight">Select Node</h3>
+                    <span class="font-mono text-[10px] text-outline">0x6-MATRIX-SELECT</span>
+                  </div>
+                  <div class="grid grid-cols-3 gap-3">
+                    <button data-dice="1" class="group relative aspect-square overflow-hidden border border-outline-variant bg-surface-container-high transition-all hover:border-primary">
+                      <span class="absolute left-1 top-1 font-mono text-[8px] text-outline group-hover:text-primary">#01</span>
+                      <span class="text-3xl font-headline font-bold group-hover:text-primary">1</span>
+                    </button>
+                    <button data-dice="2" class="glow-primary relative aspect-square border border-primary bg-surface-container-high text-primary">
+                      <span class="absolute left-1 top-1 font-mono text-[8px] text-primary">#02</span>
+                      <span class="text-3xl font-headline font-bold">2</span>
+                      <div class="absolute bottom-0 left-0 h-1 w-full bg-primary"></div>
+                    </button>
+                    <button data-dice="3" class="group relative aspect-square overflow-hidden border border-outline-variant bg-surface-container-high transition-all hover:border-primary">
+                      <span class="absolute left-1 top-1 font-mono text-[8px] text-outline group-hover:text-primary">#03</span>
+                      <span class="text-3xl font-headline font-bold group-hover:text-primary">3</span>
+                    </button>
+                    <button data-dice="4" class="group relative aspect-square overflow-hidden border border-outline-variant bg-surface-container-high transition-all hover:border-primary">
+                      <span class="absolute left-1 top-1 font-mono text-[8px] text-outline group-hover:text-primary">#04</span>
+                      <span class="text-3xl font-headline font-bold group-hover:text-primary">4</span>
+                    </button>
+                    <button data-dice="5" class="group relative aspect-square overflow-hidden border border-outline-variant bg-surface-container-high transition-all hover:border-primary">
+                      <span class="absolute left-1 top-1 font-mono text-[8px] text-outline group-hover:text-primary">#05</span>
+                      <span class="text-3xl font-headline font-bold group-hover:text-primary">5</span>
+                    </button>
+                    <button data-dice="6" class="group relative aspect-square overflow-hidden border border-outline-variant bg-surface-container-high transition-all hover:border-primary">
+                      <span class="absolute left-1 top-1 font-mono text-[8px] text-outline group-hover:text-primary">#06</span>
+                      <span class="text-3xl font-headline font-bold group-hover:text-primary">6</span>
+                    </button>
+                  </div>
+                </section>
+
+                <section class="bg-surface-container-low p-4">
+                  <div class="flex items-center justify-between">
+                    <div class="space-y-1">
+                      <span class="block font-headline text-sm font-bold uppercase tracking-wider">Parity Logic</span>
+                      <span class="block font-mono text-[10px] text-outline">AUTO-MODULATOR</span>
+                    </div>
+                    <div class="flex border border-outline-variant bg-surface-container-highest p-1">
+                      <button data-parity="even" class="bg-primary px-6 py-2 text-xs font-black uppercase tracking-widest text-on-primary">Even</button>
+                      <button data-parity="odd" class="px-6 py-2 text-xs font-black uppercase tracking-widest text-outline transition-colors hover:text-on-surface">Odd</button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <section class="space-y-4 border border-outline-variant bg-surface-container-high p-5">
+                <div class="bg-surface-container-highest border-l-4 border-primary p-4">
+                  <div class="mb-2 flex justify-between items-center">
+                    <label class="font-mono text-[10px] uppercase text-outline">Dice Amount ($VOLT)</label>
+                    <div class="flex gap-2">
+                      <button class="text-[10px] font-mono text-primary hover:underline">MIN</button>
+                      <button class="text-[10px] font-mono text-primary hover:underline">MAX</button>
+                    </div>
+                  </div>
+                  <input id="dice-amount-input" class="w-full border-0 bg-transparent p-0 text-3xl font-mono font-bold text-on-surface focus:ring-0" type="number" value="0.00" min="0" step="0.0001" />
+                </div>
+
+                <div class="bg-surface-container-highest border-l-4 border-outline p-4">
+                  <div class="mb-2 flex justify-between items-center">
+                    <label class="font-mono text-[10px] uppercase text-outline">Parity Amount ($VOLT)</label>
+                    <div class="flex gap-2">
+                      <button class="text-[10px] font-mono text-primary hover:underline">MIN</button>
+                      <button class="text-[10px] font-mono text-primary hover:underline">MAX</button>
+                    </div>
+                  </div>
+                  <input id="parity-amount-input" class="w-full border-0 bg-transparent p-0 text-3xl font-mono font-bold text-on-surface focus:ring-0" type="number" value="0.00" min="0" step="0.0001" />
+                </div>
+
+                <div class="border border-outline-variant bg-surface-container-low p-4">
+                  <div class="flex items-center justify-between">
+                    <span class="font-mono text-[10px] uppercase text-outline">Bet Summary</span>
+                    <span class="font-mono text-[10px] uppercase text-primary">JACKPOT ELIGIBLE</span>
+                  </div>
+                  <div class="mt-4 space-y-3 text-sm">
+                    <div class="flex items-center justify-between">
+                      <span class="text-outline">Total Stake</span>
+                      <span id="total-stake-display" class="font-mono font-bold text-on-surface">0.00 $VOLT</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span class="text-outline">Selected Dice</span>
+                      <span id="selected-dice-display" class="font-mono font-bold text-on-surface">-</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span class="text-outline">Selected Parity</span>
+                      <span id="selected-parity-display" class="font-mono font-bold text-on-surface">EVEN</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button id="place-bet-btn" class="glow-primary w-full bg-primary py-5 font-headline text-xl font-black uppercase tracking-tighter text-on-primary transition-all active:scale-95">
+                  Place Bet
+                </button>
+              </section>
+            </div>
+          </section>
+
+          <section class="grid gap-6 lg:grid-cols-2">
+            <section class="border border-outline-variant bg-surface-container-high p-6">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-primary">ev_station</span>
+                  <h3 class="font-headline text-lg font-bold uppercase">Power Station</h3>
+                </div>
+                <span class="bg-primary/10 px-2 py-1 font-mono text-[8px] uppercase text-primary">Operational</span>
+              </div>
+              <div class="mt-6 space-y-5">
+                <div class="space-y-3">
+                  <span class="text-[10px] font-mono uppercase text-outline">Convert to $VOLT</span>
+                  <div class="flex gap-3">
+                    <input id="charge-amount-input" class="w-full border border-outline-variant bg-surface-container-highest px-4 py-3 text-sm text-on-surface focus:border-primary focus:ring-0" type="number" placeholder="Deposit ETH" min="0" step="0.0001" />
+                    <button id="charge-btn" class="border border-outline-variant bg-surface-container-highest px-4 py-3 text-xs font-bold uppercase transition-colors hover:border-primary">Charge</button>
+                  </div>
+                </div>
+                <div class="space-y-3">
+                  <span class="text-[10px] font-mono uppercase text-outline">Liquidate $VOLT</span>
+                  <div class="flex gap-3">
+                    <input id="discharge-amount-input" class="w-full border border-outline-variant bg-surface-container-highest px-4 py-3 text-sm text-on-surface focus:border-primary focus:ring-0" type="number" placeholder="Withdraw $VOLT" min="0" step="0.0001" />
+                    <button id="discharge-btn" class="border border-outline-variant bg-surface-container-highest px-4 py-3 text-xs font-bold uppercase transition-colors hover:border-primary">Discharge</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="border border-outline-variant bg-surface-container-high p-6">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-primary">toll</span>
+                  <h3 class="font-headline text-lg font-bold uppercase">Claim Center</h3>
+                </div>
+                <span class="font-mono text-[10px] text-outline">ROUND #011</span>
+              </div>
+              <div class="mt-6 space-y-4">
+                <div class="border border-outline-variant bg-surface-container-highest p-4">
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-outline">Pool Reward</span>
+                    <span id="claim-pool-reward" class="font-mono font-bold text-on-surface">0.0000 $VOLT</span>
+                  </div>
+                  <div class="mt-3 flex items-center justify-between text-sm">
+                    <span class="text-outline">Jackpot Reward</span>
+                    <span id="claim-jackpot-reward" class="font-mono font-bold text-primary">0.0000 ETH</span>
+                  </div>
+                  <div class="mt-3 flex items-center justify-between text-sm">
+                    <span class="text-outline">House Fee</span>
+                    <span id="claim-house-fee" class="font-mono font-bold text-error">0.0000 $VOLT</span>
+                  </div>
+                </div>
+                <div class="border-l-4 border-primary bg-surface-container-low p-4">
+                  <div class="font-mono text-[10px] uppercase text-outline">Net Claimable</div>
+                  <div id="claim-net-winnings" class="mt-2 text-3xl font-headline font-black text-primary">0.0000 $VOLT</div>
+                </div>
+                <button id="claim-btn" class="glow-primary w-full bg-primary py-4 font-headline text-lg font-black uppercase tracking-tighter text-on-primary transition-all active:scale-95">
+                  Claim Winnings
+                </button>
+                <div id="claim-round-label" class="font-mono text-[10px] uppercase text-outline">Latest settled round: --</div>
+              </div>
+            </section>
+          </section>
+        </div>
+
+        <section class="grid gap-6 lg:grid-cols-2">
+          <section class="border border-outline-variant bg-surface-container-high p-6">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary">account_balance</span>
+              <h3 class="font-headline text-lg font-bold uppercase">Treasury Metrics</h3>
+            </div>
+            <div class="mt-6 space-y-3">
+              <div class="border-l-2 border-primary bg-surface-container-highest p-4">
+                <div class="font-mono text-[10px] uppercase text-outline">Contract Balance</div>
+                <div id="contract-balance-display" class="mt-2 text-xl font-bold text-on-surface">0.0000 ETH</div>
+              </div>
+              <div class="border-l-2 border-primary bg-surface-container-highest p-4">
+                <div class="font-mono text-[10px] uppercase text-outline">Redeemable Credits</div>
+                <div id="redeemable-credits-display" class="mt-2 text-xl font-bold text-on-surface">0.0000 $VOLT</div>
+              </div>
+              <div class="border-l-2 border-primary bg-surface-container-highest p-4">
+                <div class="font-mono text-[10px] uppercase text-outline">Total ETH Contributed</div>
+                <div id="total-contributed-display" class="mt-2 text-xl font-bold text-on-surface">0.0000 ETH</div>
+              </div>
+              <div class="border-l-2 border-primary bg-surface-container-highest p-4">
+                <div class="font-mono text-[10px] uppercase text-outline">Jackpot Balance</div>
+                <div id="treasury-jackpot-display" class="mt-2 text-xl font-bold text-primary">0.0000 ETH</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="border border-outline-variant bg-surface-container-high p-6">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary">casino</span>
+              <h3 class="font-headline text-lg font-bold uppercase">Round Feed</h3>
+            </div>
+            <div id="round-feed" class="mt-6 space-y-3">
+              <div class="border border-outline-variant bg-surface-container-highest p-4">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono text-xs text-on-surface">No round data</span>
+                  <span class="font-mono text-[10px] uppercase text-outline">Idle</span>
+                </div>
+                <div class="mt-2 text-sm text-outline">Set a contract address and connect a wallet to load history.</div>
+              </div>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <nav class="fixed bottom-0 left-0 z-50 flex h-16 w-full items-stretch justify-around border-t-2 border-yellow-400/30 bg-[#091328]/95 shadow-[0_-10px_30px_rgba(250,204,21,0.1)] backdrop-blur-md">
+      <a class="flex w-full flex-col items-center justify-center border-t-2 border-yellow-400 bg-yellow-400/10 py-2 text-yellow-400 -mt-[2px] transition-all hover:text-yellow-200" href="#">
+        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">casino</span>
+        <span class="mt-1 font-mono text-[10px] uppercase tracking-widest">GAME</span>
+      </a>
+      <a class="flex w-full flex-col items-center justify-center py-2 text-slate-500 transition-all hover:text-yellow-200" href="#">
+        <span class="material-symbols-outlined">ev_station</span>
+        <span class="mt-1 font-mono text-[10px] uppercase tracking-widest">WALLET</span>
+      </a>
+      <a class="flex w-full flex-col items-center justify-center py-2 text-slate-500 transition-all hover:text-yellow-200" href="#">
+        <span class="material-symbols-outlined">leaderboard</span>
+        <span class="mt-1 font-mono text-[10px] uppercase tracking-widest">ROUND</span>
+      </a>
+      <a class="flex w-full flex-col items-center justify-center py-2 text-slate-500 transition-all hover:text-yellow-200" href="./admin.html">
+        <span class="material-symbols-outlined">admin_panel_settings</span>
+        <span class="mt-1 font-mono text-[10px] uppercase tracking-widest">ADMIN</span>
+      </a>
+    </nav>
+    <div id="page-status" class="fixed right-4 top-24 z-50 hidden border border-primary/40 bg-surface-container-high px-4 py-3 text-sm text-on-surface shadow-[0_0_12px_rgba(250,204,21,0.18)]"></div>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+    <script src="./js/voltsonic-shared.js"></script>
+    <script src="./js/player.js"></script>
+  </body>
+</html>

@@ -1,13 +1,14 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
-import { VOLTSONIC_ABI, formatEth, formatVolt, getExplorerRoundCards } from "./lib/contract";
+import { VOLTSONIC_ABI, VOLT_ERC20_ABI, formatEth, formatVolt, getExplorerRoundCards } from "./lib/contract";
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
 const CHAINLINK_ETH_USD_FEED = import.meta.env.VITE_CHAINLINK_ETH_USD_FEED_ADDRESS || "";
 const BASE_SEPOLIA_RPC_URL = import.meta.env.VITE_BASE_SEPOLIA_RPC_URL || "";
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8001";
 const ROUND_DURATION_SECONDS = Number(import.meta.env.VITE_VOLTSONIC_ROUND_DURATION_SECONDS || 180);
+const VOLT_USD_PRICE = Number(import.meta.env.VITE_VOLT_USD_PRICE || 0);
 const CHAINLINK_FEED_ABI = [
   {
     inputs: [],
@@ -62,7 +63,14 @@ function shortAddress(value) {
   return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "Not connected";
 }
 
-function getBettingStateStyles(isOpen) {
+function getBettingStateStyles(isOpen, isSettling = false) {
+  if (isSettling) {
+    return {
+      valueClass: "text-amber-400",
+      iconClass: "text-amber-400",
+      borderClass: "border-amber-400",
+    };
+  }
   return isOpen
     ? {
         valueClass: "text-emerald-400",
@@ -109,6 +117,129 @@ function formatUsdToEthPreview(usdValue, ethUsdPrice) {
   const converted = convertUsdToEthAmount(usdValue, ethUsdPrice);
   if (converted === null) return "0.000000 ETH";
   return `${converted.toFixed(6)} ETH`;
+}
+
+function convertUsdToVoltAmount(usdValue, voltUsdPrice) {
+  const usd = Number(usdValue || 0);
+  const price = Number(voltUsdPrice || 0);
+  if (!Number.isFinite(usd) || usd <= 0 || !Number.isFinite(price) || price <= 0) {
+    return "";
+  }
+
+  return (usd / price).toFixed(4);
+}
+
+function convertVoltToUsdAmount(voltValue, voltUsdPrice) {
+  const volt = Number(voltValue || 0);
+  const price = Number(voltUsdPrice || 0);
+  if (!Number.isFinite(volt) || volt <= 0 || !Number.isFinite(price) || price <= 0) {
+    return "";
+  }
+
+  return (volt * price).toFixed(2);
+}
+
+function formatTokenInputPreview(value) {
+  const normalized = Number(value || 0);
+  if (!Number.isFinite(normalized) || normalized <= 0) return "0.0000 $VOLT";
+  return `${normalized.toFixed(4)} $VOLT`;
+}
+
+function DiceIcon({ number, selected = false }) {
+  const getDotPositions = (num) => {
+    const positions = {
+      1: [{ top: '50%', left: '50%' }],
+      2: [
+        { top: '25%', left: '25%' },
+        { top: '75%', left: '75%' }
+      ],
+      3: [
+        { top: '25%', left: '25%' },
+        { top: '50%', left: '50%' },
+        { top: '75%', left: '75%' }
+      ],
+      4: [
+        { top: '25%', left: '25%' },
+        { top: '25%', left: '75%' },
+        { top: '75%', left: '25%' },
+        { top: '75%', left: '75%' }
+      ],
+      5: [
+        { top: '25%', left: '25%' },
+        { top: '25%', left: '75%' },
+        { top: '50%', left: '50%' },
+        { top: '75%', left: '25%' },
+        { top: '75%', left: '75%' }
+      ],
+      6: [
+        { top: '25%', left: '25%' },
+        { top: '25%', left: '75%' },
+        { top: '50%', left: '25%' },
+        { top: '50%', left: '75%' },
+        { top: '75%', left: '25%' },
+        { top: '75%', left: '75%' }
+      ]
+    };
+    return positions[num] || positions[1];
+  };
+
+  const dotPositions = getDotPositions(number);
+
+  return (
+    <div
+      className={`relative h-10 w-10 sm:h-12 sm:w-12 rounded-lg border-2 transition-all ${
+        selected
+          ? "border-primary bg-primary/10 shadow-[0_0_12px_rgba(0,82,255,0.4)] scale-105"
+          : "border-outline-variant bg-white shadow-sm"
+      }`}
+    >
+      {/* Dice dots */}
+      {dotPositions.map((pos, index) => (
+        <div
+          key={index}
+          className={`absolute h-2 w-2 rounded-full transform -translate-x-1/2 -translate-y-1/2 ${
+            selected ? "bg-primary" : "bg-slate-700"
+          }`}
+          style={{
+            top: pos.top,
+            left: pos.left,
+          }}
+        />
+      ))}
+
+      {/* Subtle 3D effect */}
+      <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10 rounded-b-lg" />
+    </div>
+  );
+}
+
+function SettlingIndicator() {
+  const [dotCount, setDotCount] = useState(1);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDotCount((prev) => (prev === 3 ? 1 : prev + 1));
+    }, 600);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="material-symbols-outlined text-[20px] sm:text-[24px] text-amber-400 animate-spin" style={{ animationDuration: '2s' }}>
+        autorenew
+      </span>
+      <span className="text-amber-400 font-bold">
+        Settling{'.'.repeat(dotCount)}
+      </span>
+    </div>
+  );
+}
+
+function parseTokenAmount(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return 0n;
+  return ethers.parseUnits(normalized, 18);
 }
 
 function getReadableError(error) {
@@ -283,6 +414,47 @@ function ToastStack({ toasts, dismissToast }) {
   );
 }
 
+function ResultModal({ resultModal, dismissResultModal }) {
+  if (!resultModal) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md border border-primary/40 bg-[#081427] p-5 shadow-[0_0_30px_rgba(0,82,255,0.18)]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="font-headline text-lg font-bold uppercase tracking-tight text-white">
+              {resultModal.title}
+            </div>
+            <div className="mt-2 text-sm text-on-surface">{resultModal.message}</div>
+          </div>
+          <button
+            onClick={dismissResultModal}
+            className="material-symbols-outlined text-outline transition-colors hover:text-on-surface"
+            aria-label="Dismiss result notification"
+          >
+            close
+          </button>
+        </div>
+        {resultModal.winningPools?.length ? (
+          <div className="mt-4">
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-outline">Winning Pools</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {resultModal.winningPools.map((pool) => (
+                <span
+                  key={pool}
+                  className="border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 font-mono text-[10px] uppercase text-emerald-400"
+                >
+                  {pool}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function buildDefaultRoundPoolCards(selectedDice = 2, parityEven = true) {
   return [
     ...Array.from({ length: 6 }, (_, index) => ({
@@ -323,8 +495,28 @@ async function fetchBackendJson(path) {
   return response.json();
 }
 
-function mapBackendBetToUiBet(bet) {
+async function postBackendJson(path) {
+  const response = await fetch(`${BACKEND_API_URL}${path}`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    let detail = `Backend request failed: ${response.status}`;
+    try {
+      const payload = await response.json();
+      if (payload?.detail) detail = payload.detail;
+    } catch {
+      // Ignore JSON parse failures and use the status-based message.
+    }
+    throw new Error(detail);
+  }
+
+  return response.json();
+}
+
+function mapBackendBetToUiBet(bet, round = null) {
   const result = bet.status === "claimed" ? "won_claimed" : bet.status;
+  const parityResult = round?.parity_result;
   return {
     id: `${bet.tx_hash}-${bet.round_id}`,
     roundId: Number(bet.round_id),
@@ -337,10 +529,37 @@ function mapBackendBetToUiBet(bet) {
     parityAmount: BigInt(bet.parity_amount || "0"),
     betOnDice: Boolean(bet.bet_on_dice),
     betOnParity: Boolean(bet.bet_on_parity),
-    diceResult: null,
-    parityResult: "--",
+    diceResult: round?.dice_result ?? null,
+    parityResult: parityResult === null || parityResult === undefined ? "--" : parityResult ? "Even" : "Odd",
     wonDice: Boolean(bet.won && bet.bet_on_dice),
     wonParity: Boolean(bet.won && bet.bet_on_parity),
+  };
+}
+
+function createInitialSnapshot(selectedDice = 2, parityEven = true) {
+  return {
+    currentRound: "",
+    bettingOpen: false,
+    jackpotBalance: "",
+    minBet: "",
+    credits: "",
+    contractBalance: "",
+    redeemableCredits: "",
+    totalEthContributed: "",
+    claimPoolReward: "",
+    claimJackpotReward: "",
+    claimFee: "",
+    claimNet: "",
+    tokenAddress: "",
+    tokenAllowance: "",
+    latestSettledRound: "",
+    latestResultDice: "",
+    latestResultParity: "",
+    latestWinningPools: [],
+    owner: "",
+    roundStartTime: 0,
+    roundCloseTime: 0,
+    roundPoolCards: buildDefaultRoundPoolCards(selectedDice, parityEven),
   };
 }
 
@@ -351,6 +570,7 @@ function useVoltSonic() {
   const [networkName, setNetworkName] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [toasts, setToasts] = useState([]);
+  const [resultModal, setResultModal] = useState(null);
   const [backendStatus, setBackendStatus] = useState("unknown");
   const [roundCountdown, setRoundCountdown] = useState(formatCountdown(ROUND_DURATION_SECONDS));
   const [roundCountdownLabel, setRoundCountdownLabel] = useState("Closes in");
@@ -369,39 +589,34 @@ function useVoltSonic() {
     minBet: "",
   });
   const [betHistory, setBetHistory] = useState([]);
-  const [snapshot, setSnapshot] = useState({
-    currentRound: "#---",
-    bettingOpen: false,
-    jackpotBalance: "0.0000 ETH",
-    minBet: "0.0000",
-    credits: "0.0000 $VOLT",
-    contractBalance: "0.0000 ETH",
-    redeemableCredits: "0.0000 $VOLT",
-    totalEthContributed: "0.0000 ETH",
-    claimPoolReward: "0.0000 $VOLT",
-    claimJackpotReward: "0.0000 ETH",
-    claimFee: "0.0000 $VOLT",
-    claimNet: "0.0000 $VOLT",
-    latestSettledRound: "--",
-    latestResultDice: "--",
-    latestResultParity: "--",
-    latestWinningPools: [],
-    owner: "Unavailable",
-    roundStartTime: 0,
-    roundCloseTime: 0,
-    roundPoolCards: buildDefaultRoundPoolCards(),
-  });
+  const [snapshot, setSnapshot] = useState(() => createInitialSnapshot());
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
+  const [betHistoryLoading, setBetHistoryLoading] = useState(false);
 
-  const roundFeed = useMemo(() => getExplorerRoundCards(snapshot.currentRound), [snapshot.currentRound]);
+  const roundFeed = useMemo(() => (
+    snapshot.currentRound ? getExplorerRoundCards(snapshot.currentRound) : []
+  ), [snapshot.currentRound]);
   const toastIdRef = useRef(0);
   const prevSnapshotRef = useRef(null);
   const prevAccountRef = useRef("");
   const prevBackendStatusRef = useRef("unknown");
   const countdownSignalsRef = useRef({ roundKey: "", start60: false, start10: false, close60: false, close10: false });
   const recentToastKeysRef = useRef(new Map());
+  const hasInitialDataLoadRef = useRef(false);
+  const hasSeenInitialBackendStatusRef = useRef(false);
+  const hasSeenInitialAccountRef = useRef(false);
+  const resultModalTimeoutRef = useRef(null);
 
   function dismissToast(id) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
+  }
+
+  function dismissResultModal() {
+    setResultModal(null);
+    if (resultModalTimeoutRef.current) {
+      window.clearTimeout(resultModalTimeoutRef.current);
+      resultModalTimeoutRef.current = null;
+    }
   }
 
   function pushToast({ type = "info", title = "Notice", message, dedupeKey, duration = 5000 }) {
@@ -424,6 +639,24 @@ function useVoltSonic() {
   function notify(message, type = "info", title = "Notice", dedupeKey) {
     setStatusMessage(message);
     pushToast({ type, title, message, dedupeKey });
+  }
+
+  function showResultModal(title, message, winningPools = [], duration = 7000) {
+    setResultModal({ title, message, winningPools });
+    if (resultModalTimeoutRef.current) {
+      window.clearTimeout(resultModalTimeoutRef.current);
+    }
+    resultModalTimeoutRef.current = window.setTimeout(() => {
+      setResultModal(null);
+      resultModalTimeoutRef.current = null;
+    }, duration);
+  }
+
+  function triggerInteractionLoading(nextAccount = account) {
+    setSnapshotLoading(true);
+    if (nextAccount) {
+      setBetHistoryLoading(true);
+    }
   }
 
   useEffect(() => {
@@ -468,6 +701,11 @@ function useVoltSonic() {
   useEffect(() => {
     const previousStatus = prevBackendStatusRef.current;
     if (previousStatus !== backendStatus) {
+      if (!hasSeenInitialBackendStatusRef.current) {
+        hasSeenInitialBackendStatusRef.current = true;
+        prevBackendStatusRef.current = backendStatus;
+        return;
+      }
       if (backendStatus === "ready") {
         pushToast({
           type: "success",
@@ -516,18 +754,24 @@ function useVoltSonic() {
 
     async function load() {
       try {
-        const [currentState, currentPoolStats, totalVaultDeposits, totalEthContributed, owner, balance] = await Promise.all([
+        const [currentState, currentPoolStats, totalVaultDeposits, totalEthContributed, owner, tokenAddress] = await Promise.all([
           contract.getCurrentRoundState(),
           contract.getCurrentPoolStats(),
           contract.totalVaultDeposits(),
           contract.totalEthContributed(),
           contract.owner(),
-          provider.getBalance(CONTRACT_ADDRESS),
+          contract.voltToken(),
         ]);
+
+        const tokenContract = new ethers.Contract(tokenAddress, VOLT_ERC20_ABI, provider);
 
         const currentRoundNumber = Number(currentState.roundId);
         const latestSettledRoundId = currentRoundNumber > 0 ? currentRoundNumber - 1 : null;
-        const connectedCredits = account ? await contract.voltCredits(account) : 0n;
+        const [connectedCredits, contractTokenBalance, tokenAllowance] = await Promise.all([
+          account ? tokenContract.balanceOf(account) : Promise.resolve(0n),
+          tokenContract.balanceOf(CONTRACT_ADDRESS),
+          account ? tokenContract.allowance(account, CONTRACT_ADDRESS) : Promise.resolve(0n),
+        ]);
 
         let preview = [0n, 0n, 0n, 0n, false];
         let latestRoundSummary = null;
@@ -550,16 +794,18 @@ function useVoltSonic() {
         setSnapshot({
           currentRound: `#${currentRoundNumber}`,
           bettingOpen: currentState.isBettingOpen,
-          jackpotBalance: formatEth(currentState.currentJackpot),
+          jackpotBalance: formatVolt(currentState.currentJackpot),
           minBet: ethers.formatEther(currentState.minimumBet),
           credits: formatVolt(connectedCredits),
-          contractBalance: formatEth(balance),
+          contractBalance: formatVolt(contractTokenBalance),
           redeemableCredits: formatVolt(totalVaultDeposits),
-          totalEthContributed: formatEth(totalEthContributed),
+          totalEthContributed: formatVolt(totalEthContributed),
           claimPoolReward: formatVolt(preview[0]),
-          claimJackpotReward: formatEth(preview[1]),
+          claimJackpotReward: formatVolt(preview[1]),
           claimFee: formatVolt(preview[2]),
           claimNet: formatVolt(preview[3]),
+          tokenAddress,
+          tokenAllowance: formatVolt(tokenAllowance),
           latestSettledRound: latestRoundSummary
             ? `#${Number(latestRoundSummary.round_id ?? latestSettledRoundId)}`
             : latestSettledRoundId === null
@@ -574,7 +820,7 @@ function useVoltSonic() {
           latestWinningPools: latestRoundSummary
             ? [
                 `Dice ${Number(latestRoundSummary.dice_result ?? latestRoundSummary.diceResult)}`,
-                (latestRoundSummary.parity_result ?? latestRoundSummary.parityResult) ? "Even Pool" : "Odd Pool",
+                /*(latestRoundSummary.parity_result ?? latestRoundSummary.parityResult) ? "Even Pool" : "Odd Pool",*/
               ]
             : [],
           owner,
@@ -601,8 +847,12 @@ function useVoltSonic() {
             },
           ],
         });
+        setSnapshotLoading(false);
       } catch (error) {
-        if (!cancelled) notify(getReadableError(error), "error", "Sync Error");
+        if (!cancelled) {
+          setSnapshotLoading(false);
+          notify(getReadableError(error), "error", "Sync Error");
+        }
       }
     }
 
@@ -617,12 +867,45 @@ function useVoltSonic() {
 
   useEffect(() => {
     const previous = prevSnapshotRef.current;
+    
+    // On first render, just store the snapshot without showing toasts
     if (!previous) {
       prevSnapshotRef.current = snapshot;
       return;
     }
 
-    if (previous.currentRound !== snapshot.currentRound && snapshot.currentRound !== "#---") {
+    // Wait until we have real data loaded (currentRound is no longer default)
+    // This prevents toasts from showing on initial page load
+    if (!hasInitialDataLoadRef.current) {
+      if (snapshot.currentRound) {
+        // Mark that initial data has loaded, update previous snapshot, and skip toasts this round
+        hasInitialDataLoadRef.current = true;
+        prevSnapshotRef.current = snapshot;
+        return;
+      } else {
+        // Still waiting for initial data, just update previous snapshot
+        prevSnapshotRef.current = snapshot;
+        return;
+      }
+    }
+
+    /*if (previous.latestSettledRound !== snapshot.latestSettledRound && snapshot.latestSettledRound) {
+      showResultModal(
+        "Round Result",
+        `${snapshot.latestSettledRound}: Dice ${snapshot.latestResultDice}`, /*${snapshot.latestResultParity}.*
+        snapshot.latestWinningPools,
+        7000
+      );
+    }*/
+
+    // Now that initial data is loaded, show toasts only for real changes
+    if (previous.currentRound !== snapshot.currentRound && snapshot.currentRound) {
+      showResultModal(
+        "Round Result",
+        `${snapshot.latestSettledRound}: Dice ${snapshot.latestResultDice}`, /*${snapshot.latestResultParity}.*/
+        snapshot.latestWinningPools,
+        7000
+      );
       pushToast({
         type: "info",
         title: "New Round Started",
@@ -642,25 +925,14 @@ function useVoltSonic() {
       });
     }
 
-    if (previous.latestSettledRound !== snapshot.latestSettledRound && snapshot.latestSettledRound !== "--") {
-      pushToast({
-        type: "success",
-        title: "Round Result",
-        message: `${snapshot.latestSettledRound}: Dice ${snapshot.latestResultDice}, ${snapshot.latestResultParity}.`,
-        dedupeKey: `result-${snapshot.latestSettledRound}`,
-        duration: 7000,
-      });
-
-      if (snapshot.latestWinningPools.length > 0) {
-        pushToast({
-          type: "info",
-          title: "Winning Pools",
-          message: snapshot.latestWinningPools.join(" • "),
-          dedupeKey: `winning-pools-${snapshot.latestSettledRound}`,
-          duration: 7000,
-        });
-      }
-    }
+    /*if (previous.latestSettledRound !== snapshot.latestSettledRound && snapshot.latestSettledRound) {
+      showResultModal(
+        "Round Result",
+        `${snapshot.latestSettledRound}: Dice ${snapshot.latestResultDice}`, /*${snapshot.latestResultParity}.*
+        snapshot.latestWinningPools,
+        7000
+      );
+    }*/
 
     if (previous.claimNet !== snapshot.claimNet && snapshot.claimNet !== "0.0000 $VOLT") {
       pushToast({
@@ -677,6 +949,7 @@ function useVoltSonic() {
   useEffect(() => {
     if (!account) {
       setBetHistory([]);
+      setBetHistoryLoading(false);
       return;
     }
 
@@ -684,48 +957,69 @@ function useVoltSonic() {
 
     async function loadBetHistory() {
       if (backendStatus !== "ready") {
-        if (!cancelled) setBetHistory([]);
+        if (!cancelled) {
+          setBetHistory([]);
+          setBetHistoryLoading(false);
+        }
         return;
       }
 
+      if (!cancelled) setBetHistoryLoading(true);
       try {
+        try {
+          await postBackendJson("/api/v1/sync?max_blocks=200");
+        } catch (syncError) {
+          console.warn("Background bet sync failed", syncError);
+        }
+
         const [openBets, closedBets] = await Promise.all([
           fetchBackendJson(`/api/v1/bets/recent/open?user_address=${account}&limit=50`),
           fetchBackendJson(`/api/v1/bets/recent/closed?user_address=${account}&limit=50`),
         ]);
 
-        const rawEntries = [...openBets, ...closedBets].map(mapBackendBetToUiBet);
+        const mergedBets = [...openBets, ...closedBets];
+        const closedRoundIds = [...new Set(
+          mergedBets
+            .filter((bet) => bet.status !== "open")
+            .map((bet) => Number(bet.round_id))
+            .filter((roundId) => Number.isFinite(roundId))
+        )];
+        const roundEntries = await Promise.all(
+          closedRoundIds.map(async (roundId) => {
+            try {
+              const round = await fetchBackendJson(`/api/v1/rounds/${roundId}`);
+              return [roundId, round];
+            } catch {
+              return [roundId, null];
+            }
+          })
+        );
+        const roundsById = new Map(roundEntries);
+        const rawEntries = mergedBets.map((bet) => mapBackendBetToUiBet(bet, roundsById.get(Number(bet.round_id)) || null));
 
         if (cancelled) return;
 
         rawEntries.sort((a, b) => b.roundId - a.roundId);
         setBetHistory(rawEntries);
+        setBetHistoryLoading(false);
       } catch (error) {
         if (!cancelled) {
           setBetHistory([]);
+          setBetHistoryLoading(false);
           notify(getReadableError(error), "error", "History Error");
         }
       }
     }
 
     loadBetHistory();
-    const intervalId = window.setInterval(loadBetHistory, 12000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
     };
-  }, [account, backendStatus]);
+  }, [account, backendStatus, snapshot.currentRound, snapshot.bettingOpen, snapshot.latestSettledRound]);
 
   useEffect(() => {
     if (!BASE_SEPOLIA_RPC_URL || !CHAINLINK_ETH_USD_FEED || !ethers.isAddress(CHAINLINK_ETH_USD_FEED)) {
       setEthUsdStatus("missing_config");
-      pushToast({
-        type: "warning",
-        title: "Price Feed Missing",
-        message: "Chainlink ETH/USD feed is not configured.",
-        dedupeKey: "price-feed-missing",
-      });
       return;
     }
 
@@ -881,6 +1175,11 @@ function useVoltSonic() {
   useEffect(() => {
     const previousAccount = prevAccountRef.current;
     if (previousAccount !== account) {
+      if (!hasSeenInitialAccountRef.current) {
+        hasSeenInitialAccountRef.current = true;
+        prevAccountRef.current = account;
+        return;
+      }
       if (account && !previousAccount) {
         pushToast({
           type: "success",
@@ -907,6 +1206,13 @@ function useVoltSonic() {
     }
   }, [account]);
 
+  useEffect(() => () => {
+    if (resultModalTimeoutRef.current) {
+      window.clearTimeout(resultModalTimeoutRef.current);
+      resultModalTimeoutRef.current = null;
+    }
+  }, []);
+
   async function connectWallet() {
     if (!window.ethereum) {
       notify("Install MetaMask or another injected wallet first.", "warning", "Wallet Required");
@@ -916,6 +1222,7 @@ function useVoltSonic() {
     try {
       const nextProvider = provider || new ethers.BrowserProvider(window.ethereum);
       const accounts = await nextProvider.send("eth_requestAccounts", []);
+      triggerInteractionLoading(accounts[0] || "");
       setProvider(nextProvider);
       setAccount(accounts[0] || "");
       notify(
@@ -941,6 +1248,7 @@ function useVoltSonic() {
         params: [{ eth_accounts: {} }],
       });
       const accounts = await nextProvider.send("eth_accounts", []);
+      triggerInteractionLoading(accounts[0] || "");
       setProvider(nextProvider);
       setAccount(accounts[0] || "");
       notify(
@@ -960,17 +1268,25 @@ function useVoltSonic() {
     }
 
     try {
+      triggerInteractionLoading();
       const signer = await provider.getSigner();
       const signedContract = contract.connect(signer);
       notify(pendingMessage, "info", "Transaction Submitted");
-      const tx = await runTx(signedContract);
+      const tx = await runTx(signedContract, signer);
       pushToast({
         type: "info",
         title: "Waiting For Confirmation",
         message: `Tx ${tx.hash.slice(0, 10)}... submitted.`,
         dedupeKey: `tx-hash-${tx.hash}`,
       });
-      await tx.wait();
+      const receipt = await tx.wait();
+      if (backendStatus === "ready" && receipt?.blockNumber) {
+        try {
+          await postBackendJson(`/api/v1/sync?from_block=${receipt.blockNumber}&max_blocks=1`);
+        } catch (syncError) {
+          console.warn("Backend sync after transaction failed", syncError);
+        }
+      }
       notify(successMessage, "success", "Transaction Confirmed");
       window.location.reload();
     } catch (error) {
@@ -978,16 +1294,41 @@ function useVoltSonic() {
     }
   }
 
+  async function approveVoltIfNeeded(signer, amount) {
+    const signedContract = contract.connect(signer);
+    const tokenAddress = await signedContract.voltToken();
+    const tokenContract = new ethers.Contract(tokenAddress, VOLT_ERC20_ABI, signer);
+    const ownerAddress = await signer.getAddress();
+    const allowance = await tokenContract.allowance(ownerAddress, CONTRACT_ADDRESS);
+
+    if (allowance >= amount) {
+      return;
+    }
+
+    notify("Approving VOLT spend...", "info", "Approval Required");
+    const approveTx = await tokenContract.approve(CONTRACT_ADDRESS, amount);
+    pushToast({
+      type: "info",
+      title: "Waiting For Approval",
+      message: `Tx ${approveTx.hash.slice(0, 10)}... submitted.`,
+      dedupeKey: `approve-${approveTx.hash}`,
+    });
+    await approveTx.wait();
+    notify("VOLT approval confirmed.", "success", "Approval Confirmed");
+  }
+
   return {
     account,
     networkName,
     statusMessage,
     snapshot,
+    snapshotLoading,
     betForm,
     setBetForm,
     adminForm,
     setAdminForm,
     betHistory,
+    betHistoryLoading,
     roundFeed,
     roundCountdown,
     roundCountdownLabel,
@@ -995,9 +1336,12 @@ function useVoltSonic() {
     ethUsdStatus,
     backendStatus,
     toasts,
+    resultModal,
     dismissToast,
+    dismissResultModal,
     connectWallet,
     switchWallet,
+    approveVoltIfNeeded,
     writeContract,
   };
 }
@@ -1022,7 +1366,7 @@ function BottomNavLink({ to, label, icon, fill = false }) {
   );
 }
 
-function Shell({ children, account, connectWallet, switchWallet, networkName, statusMessage, title, icon, toasts, dismissToast }) {
+function Shell({ children, account, connectWallet, switchWallet, networkName, statusMessage, title, icon, toasts, resultModal, dismissToast, dismissResultModal }) {
   return (
     <div className="min-h-screen overflow-x-hidden bg-background pb-24 text-on-surface selection:bg-primary selection:text-on-primary">
       <header className="sticky top-0 z-50 flex w-full max-w-none items-center justify-between border-b border-primary/20 bg-[#060e20] px-4 py-3 text-primary sm:px-6 sm:py-4">
@@ -1039,9 +1383,9 @@ function Shell({ children, account, connectWallet, switchWallet, networkName, st
             <BottomNavLink to="/bets" label="BETS" icon="receipt_long" />
             <BottomNavLink to="/wallet" label="WALLET" icon="ev_station" />
           </div>
-          <div className="hidden border border-outline-variant bg-surface-container-high px-3 py-2 text-[11px] font-mono uppercase tracking-wide text-on-surface md:block">
+          {/*<div className="hidden border border-outline-variant bg-surface-container-high px-3 py-2 text-[11px] font-mono uppercase tracking-wide text-on-surface md:block">
             {networkName || "No network"}
-          </div>
+          </div>*/}
           {account ? (
             <div className="flex items-center gap-2">
               <div className="hidden border border-outline-variant bg-surface-container-high px-3 py-2 text-[11px] font-mono uppercase tracking-wide text-on-surface sm:block">
@@ -1051,7 +1395,7 @@ function Shell({ children, account, connectWallet, switchWallet, networkName, st
                 onClick={switchWallet}
                 className="border border-primary/40 bg-primary/10 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-primary transition-colors hover:bg-primary/20 active:scale-95 sm:px-4 sm:text-xs"
               >
-                Switch Wallet
+                Connected
               </button>
             </div>
           ) : (
@@ -1066,6 +1410,7 @@ function Shell({ children, account, connectWallet, switchWallet, networkName, st
       </header>
 
       <ToastStack toasts={toasts} dismissToast={dismissToast} />
+      <ResultModal resultModal={resultModal} dismissResultModal={dismissResultModal} />
 
       {children}
 
@@ -1079,12 +1424,33 @@ function Shell({ children, account, connectWallet, switchWallet, networkName, st
   );
 }
 
+function SkeletonBlock({ className = "" }) {
+  return <div className={`animate-pulse rounded bg-white/10 ${className}`}></div>;
+}
+
+function SkeletonText({ width = "w-24", className = "" }) {
+  return <SkeletonBlock className={`h-4 ${width} ${className}`.trim()} />;
+}
+
+function SummaryRowSkeleton({ topMargin = false }) {
+  return (
+    <div className={`flex items-center justify-between text-sm ${topMargin ? "mt-3" : ""}`}>
+      <SkeletonText width="w-24" className="h-3" />
+      <SkeletonText width="w-28" className="h-4" />
+    </div>
+  );
+}
+
 function StatusCell({ label, value, icon, accent, valueClass = "", iconClass = "", borderClass = "border-primary", subvalue = "" }) {
+  const isComponent = typeof value === "object" && value.type;
+  
   return (
     <div className={`flex items-center justify-between border-l-2 pl-3 sm:pl-4 ${borderClass}`}>
       <div>
         <span className="font-mono text-[9px] uppercase tracking-wide text-outline sm:text-[10px] sm:tracking-widest">{label}</span>
-        <div className={`mt-1 text-xs font-bold sm:text-sm ${valueClass || (accent ? "text-primary" : "text-on-surface")}`}>{value}</div>
+        <div className={`mt-1 text-xs font-bold sm:text-sm ${isComponent ? "" : valueClass || (accent ? "text-primary" : "text-on-surface")}`}>
+          {value}
+        </div>
         {subvalue ? <div className="mt-1 font-mono text-[9px] uppercase tracking-wide text-on-surface-variant">{subvalue}</div> : null}
       </div>
       <span className={`material-symbols-outlined text-[20px] sm:text-[24px] ${iconClass || "text-primary"}`}>{icon}</span>
@@ -1092,24 +1458,25 @@ function StatusCell({ label, value, icon, accent, valueClass = "", iconClass = "
   );
 }
 
-function StatusStrip({ snapshot, walletConnected, roundCountdown, roundCountdownLabel }) {
-  const bettingStateStyles = getBettingStateStyles(snapshot.bettingOpen);
+function StatusStrip({ snapshot, walletConnected, roundCountdown, roundCountdownLabel, snapshotLoading }) {
+  const isSettling = roundCountdownLabel === "Settling";
+  const bettingStateStyles = getBettingStateStyles(snapshot.bettingOpen, isSettling);
 
   return (
     <div className="w-full border-b border-outline-variant bg-surface-container-low px-4 py-3 sm:px-6 sm:py-4">
       <div className="mx-auto grid max-w-7xl grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
-        <StatusCell label="Jackpot Pool" value={snapshot.jackpotBalance} icon="trophy" accent />
-        <StatusCell label="Credits" value={snapshot.credits} icon="battery_charging_80" accent />
-        <StatusCell label="Current Round" value={snapshot.currentRound} icon="hub" accent={false} />
+        <StatusCell label="Jackpot Pool" value={snapshotLoading ? <SkeletonText width="w-24" /> : <div className="text-gray-400">Coming soon</div>/*snapshot.jackpotBalance*/ } icon="trophy" accent />
+        <StatusCell label="Credits" value={snapshotLoading ? <SkeletonText width="w-24" /> : snapshot.credits} icon="battery_charging_80" accent />
+        <StatusCell label="Current Round" value={snapshotLoading ? <SkeletonText width="w-16" /> : snapshot.currentRound} icon="hub" accent={false} />
         <StatusCell
           label="Betting State"
-          value={snapshot.bettingOpen ? "OPEN" : "CLOSED"}
-          subvalue={`${roundCountdownLabel} ${roundCountdown}`}
+          value={snapshotLoading ? <SkeletonText width="w-20" /> : isSettling ? <SettlingIndicator /> : snapshot.bettingOpen ? "OPEN" : "CLOSED"}
+          subvalue={snapshotLoading ? "" : isSettling ? undefined : `${roundCountdownLabel} ${roundCountdown}`}
           icon="power_settings_new"
           accent
-          valueClass={bettingStateStyles.valueClass}
-          iconClass={bettingStateStyles.iconClass}
-          borderClass={bettingStateStyles.borderClass}
+          valueClass={snapshotLoading ? "" : bettingStateStyles.valueClass}
+          iconClass={snapshotLoading ? "" : bettingStateStyles.iconClass}
+          borderClass={snapshotLoading ? "border-primary/40" : bettingStateStyles.borderClass}
         />
       </div>
     </div>
@@ -1149,6 +1516,8 @@ function AmountPanel({
   label,
   value,
   onChange,
+  usdValue = "",
+  onUsdChange,
   borderClass,
   valuePrefix = "",
   previewLabel = "",
@@ -1176,7 +1545,23 @@ function AmountPanel({
           placeholder="0.00"
         />
       </div>
-      
+      {typeof onUsdChange === "function" ? (
+        <div className="mt-3 border border-outline-variant bg-surface-container-low px-3 py-2">
+          <div className="mb-1 font-mono text-[9px] uppercase text-outline">USD Input</div>
+          <div className="flex items-center">
+            <span className="mr-2 text-sm font-bold text-secondary">$</span>
+            <input
+              value={usdValue}
+              onChange={(event) => onUsdChange(event.target.value)}
+              className="w-full border-0 bg-transparent p-0 text-sm font-mono font-bold text-on-surface focus:ring-0"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1211,9 +1596,9 @@ function InlineAction({
               step="0.0001"
             />
           </div>
-          <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-on-surface-variant">
+          {/*<div className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-on-surface-variant">
             {previewLabel} {previewValue ? previewValue(value) : formatInputEthPreview(value)}
-          </div>
+          </div>*/}
           {subnote ? <div className="mt-1 text-[11px] text-outline">{subnote}</div> : null}
         </div>
         <button
@@ -1227,7 +1612,7 @@ function InlineAction({
   );
 }
 
-function HeroPanel({ snapshot, title, copy, icon = "electric_bolt" }) {
+function HeroPanel({ snapshot, snapshotLoading = false, title, copy, icon = "electric_bolt" }) {
   const dicePools = snapshot.roundPoolCards.slice(0, 6);
   const parityPools = snapshot.roundPoolCards.slice(6);
   const [activePoolTab, setActivePoolTab] = useState("dice");
@@ -1238,9 +1623,27 @@ function HeroPanel({ snapshot, title, copy, icon = "electric_bolt" }) {
         <span className="material-symbols-outlined text-4xl sm:text-6xl">{icon}</span>
       </div>
       <div className="relative z-10">
-        <div className="glass-panel circuit-border border border-outline-variant p-4 sm:p-5 lg:p-6">
-          {snapshot.latestSettledRound !== "--" ? (
+        <div className="circuit-border border border-none p-4 sm:p-5 lg:p-6">
+          {snapshotLoading ? (
             <div className="border border-outline-variant bg-surface-container-highest p-3 sm:p-4">
+              <SkeletonText width="w-36" className="h-5" />
+              <SkeletonText width="w-56" className="mt-2 h-3" />
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="border border-outline-variant bg-surface-container-low p-3">
+                  <SkeletonText width="w-20" className="h-3" />
+                  <SkeletonText width="w-28" className="mt-3 h-4" />
+                </div>
+                <div className="border border-outline-variant bg-surface-container-low p-3">
+                  <SkeletonText width="w-24" className="h-3" />
+                  <div className="mt-3 flex gap-2">
+                    <SkeletonBlock className="h-6 w-20" />
+                    <SkeletonBlock className="h-6 w-24" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : snapshot.latestSettledRound ? (
+            <div className="border border-none bg-surface-container-highest p-3 sm:p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="font-headline text-xs font-bold uppercase tracking-wide text-on-surface sm:text-sm">
@@ -1255,12 +1658,12 @@ function HeroPanel({ snapshot, title, copy, icon = "electric_bolt" }) {
                 </span>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="border border-outline-variant bg-surface-container-low p-3">
+                {/*<div className="border border-outline-variant bg-surface-container-low p-3">
                   <div className="font-mono text-[9px] uppercase text-outline">Result</div>
                   <div className="mt-2 text-sm font-bold text-on-surface">
                     Dice {snapshot.latestResultDice} • {snapshot.latestResultParity}
                   </div>
-                </div>
+                </div>*/}
                 <div className="border border-outline-variant bg-surface-container-low p-3">
                   <div className="font-mono text-[9px] uppercase text-outline">Winning Pools</div>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -1390,21 +1793,82 @@ function HeroPanel({ snapshot, title, copy, icon = "electric_bolt" }) {
   );
 }
 
-function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnected, roundCountdown, roundCountdownLabel, ethUsdPrice, ethUsdStatus }) {
-  const [activeBetTab, setActiveBetTab] = useState("combo");
+function GamePage({
+  snapshot,
+  snapshotLoading,
+  betForm,
+  setBetForm,
+  approveVoltIfNeeded,
+  writeContract,
+  walletConnected,
+  roundCountdown,
+  roundCountdownLabel,
+  ethUsdPrice,
+  ethUsdStatus,
+}) {
+  const [activeBetTab, setActiveBetTab] = useState("dice");
+  const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const totalStake = (Number(betForm.diceAmount || 0) + Number(betForm.parityAmount || 0)).toFixed(2);
-  const diceEthPreview = formatUsdToEthPreview(betForm.diceAmount, ethUsdPrice);
-  const parityEthPreview = formatUsdToEthPreview(betForm.parityAmount, ethUsdPrice);
+  const diceEthPreview = formatTokenInputPreview(betForm.diceAmount);
+  const parityEthPreview = formatTokenInputPreview(betForm.parityAmount);
 
   return (
     <>
-      <StatusStrip snapshot={snapshot} walletConnected={walletConnected} roundCountdown={roundCountdown} roundCountdownLabel={roundCountdownLabel} />
+      <StatusStrip snapshot={snapshot} walletConnected={walletConnected} roundCountdown={roundCountdown} roundCountdownLabel={roundCountdownLabel} snapshotLoading={snapshotLoading} />
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-4 sm:space-y-8 sm:py-6">
         <HeroPanel
           snapshot={snapshot}
+          snapshotLoading={snapshotLoading}
           title=""
           copy=""
         />
+
+        <section className="border border-outline-variant bg-surface-container-high p-4 sm:p-6">
+          <button
+            onClick={() => setIsInstructionsOpen(!isInstructionsOpen)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-white">help_center</span>
+              <h2 className="font-headline text-lg font-bold uppercase tracking-tight text-white">How to Play</h2>
+            </div>
+            <span className={`material-symbols-outlined text-white transition-transform ${isInstructionsOpen ? 'rotate-180' : ''}`}>
+              expand_more
+            </span>
+          </button>
+          {isInstructionsOpen && (
+            <div className="mt-4 space-y-4 text-sm text-on-surface">
+              <div>
+                <h3 className="font-headline text-base font-bold uppercase tracking-wide text-gray-400 mb-2">1. Connect Your Wallet</h3>
+                <p className="text-outline">Connect a wallet on Base Sepolia, and make sure it holds enough $VOLT for your stake. Bets are paid in $VOLT, not native ETH.</p>
+              </div>
+              <div>
+                <h3 className="font-headline text-base font-bold uppercase tracking-wide text-gray-400 mb-2">2. Approve Token Access</h3>
+                <p className="text-outline">Before betting, set a wallet spend limit for VoltSonic. This step does not deposit or move $VOLT on its own. It only allows the contract to spend up to the amount you approve from your wallet when a bet is placed.</p>
+              </div>
+              <div>
+                <h3 className="font-headline text-base font-bold uppercase tracking-wide text-gray-400 mb-2">3. Choose A Bet Type</h3>
+                <p className="text-outline">Pick one of three modes for the active round: Dice only, Parity only, or Combo. Dice bets choose a number from 1 to 6, parity bets choose Even or Odd, and combo bets submit both together.</p>
+              </div>
+              <div>
+                <h3 className="font-headline text-base font-bold uppercase tracking-wide text-gray-400 mb-2">4. Enter Your VOLT Amount</h3>
+                <p className="text-outline">Enter the amount for the pool you want to join. Each active amount must meet the contract minimum, and you can only place one bet per round from a wallet.</p>
+              </div>
+              <div>
+                <h3 className="font-headline text-base font-bold uppercase tracking-wide text-gray-400 mb-2">5. Approve And Submit</h3>
+                <p className="text-outline">When you place a bet, VoltSonic checks whether your wallet spend limit is high enough. If it is too low, raise the limit first. After that, confirm the bet transaction before the round closes, and only then will the bet amount be spent from your wallet.</p>
+              </div>
+              <div>
+                <h3 className="font-headline text-base font-bold uppercase tracking-wide text-gray-400 mb-2">6. Wait For Round Settlement</h3>
+                <p className="text-outline">Betting stays open for the round window, then the round is settled with Chainlink VRF. A winning dice bet shares the dice pool for the rolled number, and a winning parity bet shares the matching even or odd pool.</p>
+              </div>
+              <div>
+                <h3 className="font-headline text-base font-bold uppercase tracking-wide text-gray-400 mb-2">7. Claim Rewards</h3>
+                <p className="text-outline">After settlement, go to Wallet and claim if you won. Combo winners who hit both the exact dice result and the correct parity also split the jackpot snapshot for that round, while a small fee is applied to pool rewards.</p>
+              </div>
+            </div>
+          )}
+        </section>
 
         <section className="space-y-4">
           <div className="flex justify-between items-end px-2">
@@ -1417,14 +1881,6 @@ function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnecte
 
           <div className="overflow-x-auto">
             <div className="flex min-w-max border border-outline-variant bg-surface-container-highest p-1">
-              <button
-                onClick={() => setActiveBetTab("combo")}
-                className={`px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition-colors sm:px-4 sm:text-[11px] sm:tracking-[0.2em] ${
-                  activeBetTab === "combo" ? "bg-secondary text-[#032731] glow-secondary" : "text-outline hover:text-secondary"
-                }`}
-              >
-                Combo
-              </button>
               <button
                 onClick={() => setActiveBetTab("dice")}
                 className={`px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition-colors sm:px-4 sm:text-[11px] sm:tracking-[0.2em] ${
@@ -1441,10 +1897,18 @@ function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnecte
               >
                 Even / Odd
               </button>
+              <button
+                onClick={() => setActiveBetTab("combo")}
+                className={`px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition-colors sm:px-4 sm:text-[11px] sm:tracking-[0.2em] ${
+                  activeBetTab === "combo" ? "bg-secondary text-[#032731] glow-secondary" : "text-outline hover:text-secondary"
+                }`}
+              >
+                Combo
+              </button>
             </div>
           </div>
 
-          {activeBetTab === "combo" ? (
+          {activeBetTab === "dice" ? (
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_0.85fr]">
               <div className="space-y-4">
                 <section className="space-y-4">
@@ -1457,14 +1921,173 @@ function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnecte
                       <button
                         key={value}
                         onClick={() => setBetForm((current) => ({ ...current, dice: value }))}
-                        className={`group relative aspect-square overflow-hidden border bg-surface-container-high transition-all hover:border-primary ${
+                        className={`group relative aspect-square overflow-hidden border bg-surface-container-high transition-all hover:border-primary flex items-center justify-center ${
                           betForm.dice === value ? "glow-primary border-primary text-primary" : "border-outline-variant"
                         }`}
                       >
-                        <span className={`absolute left-1 top-1 font-mono text-[8px] ${betForm.dice === value ? "text-primary" : "text-outline group-hover:text-primary"}`}>
-                          #{String(value).padStart(2, "0")}
-                        </span>
-                        <span className={`text-2xl font-headline font-bold sm:text-3xl ${betForm.dice === value ? "" : "group-hover:text-primary"}`}>{value}</span>
+                        <DiceIcon number={value} selected={betForm.dice === value} />
+                        {betForm.dice === value ? <div className="absolute bottom-0 left-0 h-1 w-full bg-primary"></div> : null}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </div>
+
+              <section className="space-y-4 border border-outline-variant bg-surface-container-high p-4 sm:p-5">
+                <AmountPanel
+                  label="Dice Amount ($VOLT)"
+                  value={betForm.diceAmount}
+                  onChange={(value) => setBetForm((current) => ({ ...current, diceAmount: value }))}
+                  borderClass="border-primary"
+                  valuePrefix="$"
+                  previewLabel="Token Amount"
+                  previewValue={diceEthPreview}
+                  subnote={`Wallet balance: ${snapshot.credits}`}
+                />
+
+                <div className="border border-outline-variant bg-surface-container-low p-3 sm:p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="font-mono text-[9px] uppercase text-outline sm:text-[10px]">Dice Bet Summary</span>
+                    <span className="font-mono text-[9px] uppercase text-secondary sm:text-[10px]">Single Pool Entry</span>
+                  </div>
+                  <div className="mt-4 space-y-3 text-sm">
+                    {/*<SummaryRow label="Stake" value={`${Number(betForm.diceAmount || 0).toFixed(2)} $VOLT`} />*/}
+                    <SummaryRow label="Stake" value={formatTokenInputPreview(betForm.diceAmount)} />
+                    {/*<SummaryRow label="ETH Equivalent" value={`${(convertUsdToEthAmount(betForm.diceAmount, ethUsdPrice) || 0).toFixed(6)} ETH`} />*/}
+                    <SummaryRow label="Selected Dice" value={`${betForm.dice}`} />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() =>
+                    writeContract(
+                      async (contract, signer) => {
+                        const diceAmount = parseTokenAmount(betForm.diceAmount);
+                        if (diceAmount <= 0n) throw new Error("Enter a VOLT amount");
+                        await approveVoltIfNeeded(signer, diceAmount);
+                        return contract.placeBet(BigInt(betForm.dice), betForm.parityEven, diceAmount, 0n);
+                      },
+                      "Submitting dice bet...",
+                      "Dice bet placed."
+                    )
+                  }
+                  className="glow-primary w-full bg-primary py-4 font-headline text-base font-black uppercase tracking-tight text-on-primary transition-all active:scale-95 sm:py-5 sm:text-xl sm:tracking-tighter"
+                >
+                  Place Dice Bet
+                </button>
+              </section>
+            </div>
+          ) : null}
+
+          {activeBetTab === "parity" ? (
+            <div className="flex h-[200px] items-center justify-center p-4 sm:p-5">
+              <div className="text-center">
+                <span className="font-headline text-xs font-bold uppercase tracking-wide text-on-surface sm:text-sm">Coming Soon</span>
+                <div className="mt-2 text-sm text-outline">Parity betting is coming soon. In the meantime, try out the dice pools!</div>
+              </div>
+
+            </div>
+            /*<div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_0.85fr]">
+              <div className="space-y-4">
+                <section className="bg-surface-container-low p-3 sm:p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <span className="block font-headline text-xs font-bold uppercase tracking-wide sm:text-sm sm:tracking-wider">Parity Logic</span>
+                      <span className="block font-mono text-[9px] text-outline sm:text-[10px]">AUTO-MODULATOR</span>
+                    </div>
+                    <div className="flex border border-outline-variant bg-surface-container-highest p-1">
+                      <button
+                        onClick={() => setBetForm((current) => ({ ...current, parityEven: true }))}
+                        className={`px-4 py-2 text-xs font-black uppercase tracking-widest sm:px-6 ${
+                          betForm.parityEven ? "bg-primary text-on-primary" : "text-outline transition-colors hover:text-on-surface"
+                        }`}
+                      >
+                        Even
+                      </button>
+                      <button
+                        onClick={() => setBetForm((current) => ({ ...current, parityEven: false }))}
+                        className={`px-4 py-2 text-xs font-black uppercase tracking-widest sm:px-6 ${
+                          !betForm.parityEven ? "bg-primary text-on-primary" : "text-outline transition-colors hover:text-on-surface"
+                        }`}
+                      >
+                        Odd
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <section className="space-y-4 border border-outline-variant bg-surface-container-high p-4 sm:p-5">
+                <AmountPanel
+                  label="Parity Amount ($VOLT)"
+                  value={betForm.parityAmount}
+                  onChange={(value) => setBetForm((current) => ({ ...current, parityAmount: value }))}
+                  borderClass="border-primary"
+                  valuePrefix="$"
+                  previewLabel="Token Amount"
+                  previewValue={parityEthPreview}
+                  subnote={`Wallet balance: ${snapshot.credits}`}
+                />
+
+                <div className="border border-outline-variant bg-surface-container-low p-3 sm:p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="font-mono text-[9px] uppercase text-outline sm:text-[10px]">Parity Bet Summary</span>
+                    <span className="font-mono text-[9px] uppercase text-secondary sm:text-[10px]">Single Pool Entry</span>
+                  </div>
+                  <div className="mt-4 space-y-3 text-sm">
+                    {/*<SummaryRow label="Stake" value={`${Number(betForm.parityAmount || 0).toFixed(2)} $VOLT`} />*}
+                    <SummaryRow label="Stake" value={formatTokenInputPreview(betForm.parityAmount)} />
+                    {/*<SummaryRow label="ETH Equivalent" value={`${(convertUsdToEthAmount(betForm.parityAmount, ethUsdPrice) || 0).toFixed(6)} ETH`} />*}
+                    <SummaryRow label="Selected Parity" value={betForm.parityEven ? "EVEN" : "ODD"} />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() =>
+                    writeContract(
+                      async (contract, signer) => {
+                        const parityAmount = parseTokenAmount(betForm.parityAmount);
+                        if (parityAmount <= 0n) throw new Error("Enter a VOLT amount");
+                        await approveVoltIfNeeded(signer, parityAmount);
+                        return contract.placeBet(BigInt(betForm.dice), betForm.parityEven, 0n, parityAmount);
+                      },
+                      "Submitting parity bet...",
+                      "Parity bet placed."
+                    )
+                  }
+                  className="glow-primary w-full bg-primary py-4 font-headline text-base font-black uppercase tracking-tight text-on-primary transition-all active:scale-95 sm:py-5 sm:text-xl sm:tracking-tighter"
+                >
+                  Place Parity Bet
+                </button>
+              </section>
+            </div>*/
+          ) : null}
+
+          {activeBetTab === "combo" ? (
+            <div className="flex h-[200px] items-center justify-center p-4 sm:p-5">
+              <div className="text-center">
+                <span className="font-headline text-xs font-bold uppercase tracking-wide text-on-surface sm:text-sm">Coming Soon</span>
+                <div className="mt-2 text-sm text-outline">Combo betting is coming soon. In the meantime, try out the dice pools!</div>
+              </div>
+
+            </div>
+            /*<div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_0.85fr]">
+              <div className="space-y-4">
+                <section className="space-y-4">
+                  <div className="flex justify-between items-end px-2">
+                    <h3 className="font-headline text-base font-bold uppercase tracking-tight sm:text-lg">Select Node</h3>
+                    <span className="font-mono text-[9px] text-outline sm:text-[10px]">0x6-MATRIX-SELECT</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                    {[1, 2, 3, 4, 5, 6].map((value) => (
+                      <button
+                        key={value}
+                        onClick={() => setBetForm((current) => ({ ...current, dice: value }))}
+                        className={`group relative aspect-square overflow-hidden border bg-surface-container-high transition-all hover:border-primary flex items-center justify-center ${
+                          betForm.dice === value ? "glow-primary border-primary text-primary" : "border-outline-variant"
+                        }`}
+                      >
+                        <DiceIcon number={value} selected={betForm.dice === value} />
                         {betForm.dice === value ? <div className="absolute bottom-0 left-0 h-1 w-full bg-primary"></div> : null}
                       </button>
                     ))}
@@ -1506,9 +2129,9 @@ function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnecte
                   onChange={(value) => setBetForm((current) => ({ ...current, diceAmount: value }))}
                   borderClass="border-primary"
                   valuePrefix="$"
-                  previewLabel="Equivalent"
+                  previewLabel="Token Amount"
                   previewValue={diceEthPreview}
-                  subnote={getEthUsdStatusMessage(ethUsdStatus, ethUsdPrice)}
+                  subnote={`Wallet balance: ${snapshot.credits}`}
                 />
                 <AmountPanel
                   label="Parity Amount"
@@ -1516,9 +2139,9 @@ function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnecte
                   onChange={(value) => setBetForm((current) => ({ ...current, parityAmount: value }))}
                   borderClass="border-outline"
                   valuePrefix="$"
-                  previewLabel="Equivalent"
+                  previewLabel="Token Amount"
                   previewValue={parityEthPreview}
-                  subnote={getEthUsdStatusMessage(ethUsdStatus, ethUsdPrice)}
+                  subnote={`Wallet balance: ${snapshot.credits}`}
                 />
 
                 <div className="border border-outline-variant bg-surface-container-low p-3 sm:p-4">
@@ -1527,9 +2150,9 @@ function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnecte
                     <span className="font-mono text-[9px] uppercase text-secondary sm:text-[10px]">JACKPOT ELIGIBLE</span>
                   </div>
                   <div className="mt-4 space-y-3 text-sm">
-                    {/*<SummaryRow label="Total Stake" value={`${totalStake} $VOLT`} />*/}
-                    <SummaryRow label="Total Stake" value={`${((convertUsdToEthAmount(betForm.diceAmount, ethUsdPrice) || 0) + (convertUsdToEthAmount(betForm.parityAmount, ethUsdPrice) || 0)).toFixed(6)} $VOLT`} />
-                    {/*<SummaryRow label="ETH Equivalent" value={`${((convertUsdToEthAmount(betForm.diceAmount, ethUsdPrice) || 0) + (convertUsdToEthAmount(betForm.parityAmount, ethUsdPrice) || 0)).toFixed(6)} ETH`} />*/}
+                    {/*<SummaryRow label="Total Stake" value={`${totalStake} $VOLT`} />*}
+                    <SummaryRow label="Total Stake" value={formatTokenInputPreview((Number(betForm.diceAmount || 0) + Number(betForm.parityAmount || 0)).toString())} />
+                    {/*<SummaryRow label="ETH Equivalent" value={`${((convertUsdToEthAmount(betForm.diceAmount, ethUsdPrice) || 0) + (convertUsdToEthAmount(betForm.parityAmount, ethUsdPrice) || 0)).toFixed(6)} ETH`} />*}
                     <SummaryRow label="Selected Dice" value={`${betForm.dice}`} />
                     <SummaryRow label="Selected Parity" value={betForm.parityEven ? "EVEN" : "ODD"} />
                   </div>
@@ -1538,18 +2161,14 @@ function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnecte
                 <button
                   onClick={() =>
                     writeContract(
-                      (contract) =>
-                        (() => {
-                          const diceEthAmount = convertUsdToEthAmount(betForm.diceAmount, ethUsdPrice);
-                          const parityEthAmount = convertUsdToEthAmount(betForm.parityAmount, ethUsdPrice);
-                          if (diceEthAmount === null || parityEthAmount === null) throw new Error("ETH/USD price unavailable");
-                          return contract.placeBet(
-                            BigInt(betForm.dice),
-                            betForm.parityEven,
-                            ethers.parseEther(diceEthAmount.toFixed(18)),
-                            ethers.parseEther(parityEthAmount.toFixed(18))
-                          );
-                        })(),
+                      async (contract, signer) => {
+                        const diceAmount = parseTokenAmount(betForm.diceAmount);
+                        const parityAmount = parseTokenAmount(betForm.parityAmount);
+                        const totalAmount = diceAmount + parityAmount;
+                        if (totalAmount <= 0n) throw new Error("Enter a VOLT amount");
+                        await approveVoltIfNeeded(signer, totalAmount);
+                        return contract.placeBet(BigInt(betForm.dice), betForm.parityEven, diceAmount, parityAmount);
+                      },
                       "Submitting combo bet...",
                       "Combo bet placed."
                     )
@@ -1559,156 +2178,7 @@ function GamePage({ snapshot, betForm, setBetForm, writeContract, walletConnecte
                   Place Combo Bet
                 </button>
               </section>
-            </div>
-          ) : null}
-
-          {activeBetTab === "dice" ? (
-            <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_0.85fr]">
-              <div className="space-y-4">
-                <section className="space-y-4">
-                  <div className="flex justify-between items-end px-2">
-                    <h3 className="font-headline text-base font-bold uppercase tracking-tight sm:text-lg">Select Node</h3>
-                    <span className="font-mono text-[9px] text-outline sm:text-[10px]">0x6-MATRIX-SELECT</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                    {[1, 2, 3, 4, 5, 6].map((value) => (
-                      <button
-                        key={value}
-                        onClick={() => setBetForm((current) => ({ ...current, dice: value }))}
-                        className={`group relative aspect-square overflow-hidden border bg-surface-container-high transition-all hover:border-primary ${
-                          betForm.dice === value ? "glow-primary border-primary text-primary" : "border-outline-variant"
-                        }`}
-                      >
-                        <span className={`absolute left-1 top-1 font-mono text-[8px] ${betForm.dice === value ? "text-primary" : "text-outline group-hover:text-primary"}`}>
-                          #{String(value).padStart(2, "0")}
-                        </span>
-                        <span className={`text-2xl font-headline font-bold sm:text-3xl ${betForm.dice === value ? "" : "group-hover:text-primary"}`}>{value}</span>
-                        {betForm.dice === value ? <div className="absolute bottom-0 left-0 h-1 w-full bg-primary"></div> : null}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              </div>
-
-              <section className="space-y-4 border border-outline-variant bg-surface-container-high p-4 sm:p-5">
-                <AmountPanel
-                  label="Dice Amount ($VOLT)"
-                  value={betForm.diceAmount}
-                  onChange={(value) => setBetForm((current) => ({ ...current, diceAmount: value }))}
-                  borderClass="border-primary"
-                  valuePrefix="$"
-                  previewLabel="Equivalent"
-                  previewValue={diceEthPreview}
-                  subnote={getEthUsdStatusMessage(ethUsdStatus, ethUsdPrice)}
-                />
-
-                <div className="border border-outline-variant bg-surface-container-low p-3 sm:p-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="font-mono text-[9px] uppercase text-outline sm:text-[10px]">Dice Bet Summary</span>
-                    <span className="font-mono text-[9px] uppercase text-secondary sm:text-[10px]">Single Pool Entry</span>
-                  </div>
-                  <div className="mt-4 space-y-3 text-sm">
-                    {/*<SummaryRow label="Stake" value={`${Number(betForm.diceAmount || 0).toFixed(2)} $VOLT`} />*/}
-                    <SummaryRow label="Stake" value={`${(convertUsdToEthAmount(betForm.diceAmount, ethUsdPrice) || 0).toFixed(6)} $VOLT`} />
-                    {/*<SummaryRow label="ETH Equivalent" value={`${(convertUsdToEthAmount(betForm.diceAmount, ethUsdPrice) || 0).toFixed(6)} ETH`} />*/}
-                    <SummaryRow label="Selected Dice" value={`${betForm.dice}`} />
-                  </div>
-                </div>
-
-                <button
-                  onClick={() =>
-                    writeContract(
-                      (contract) => {
-                        const diceEthAmount = convertUsdToEthAmount(betForm.diceAmount, ethUsdPrice);
-                        if (diceEthAmount === null) throw new Error("ETH/USD price unavailable");
-                        return contract.placeBet(BigInt(betForm.dice), betForm.parityEven, ethers.parseEther(diceEthAmount.toFixed(18)), 0n);
-                      },
-                      "Submitting dice bet...",
-                      "Dice bet placed."
-                    )
-                  }
-                  className="glow-primary w-full bg-primary py-4 font-headline text-base font-black uppercase tracking-tight text-on-primary transition-all active:scale-95 sm:py-5 sm:text-xl sm:tracking-tighter"
-                >
-                  Place Dice Bet
-                </button>
-              </section>
-            </div>
-          ) : null}
-
-          {activeBetTab === "parity" ? (
-            <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_0.85fr]">
-              <div className="space-y-4">
-                <section className="bg-surface-container-low p-3 sm:p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                      <span className="block font-headline text-xs font-bold uppercase tracking-wide sm:text-sm sm:tracking-wider">Parity Logic</span>
-                      <span className="block font-mono text-[9px] text-outline sm:text-[10px]">AUTO-MODULATOR</span>
-                    </div>
-                    <div className="flex border border-outline-variant bg-surface-container-highest p-1">
-                      <button
-                        onClick={() => setBetForm((current) => ({ ...current, parityEven: true }))}
-                        className={`px-4 py-2 text-xs font-black uppercase tracking-widest sm:px-6 ${
-                          betForm.parityEven ? "bg-primary text-on-primary" : "text-outline transition-colors hover:text-on-surface"
-                        }`}
-                      >
-                        Even
-                      </button>
-                      <button
-                        onClick={() => setBetForm((current) => ({ ...current, parityEven: false }))}
-                        className={`px-4 py-2 text-xs font-black uppercase tracking-widest sm:px-6 ${
-                          !betForm.parityEven ? "bg-primary text-on-primary" : "text-outline transition-colors hover:text-on-surface"
-                        }`}
-                      >
-                        Odd
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              <section className="space-y-4 border border-outline-variant bg-surface-container-high p-4 sm:p-5">
-                <AmountPanel
-                  label="Parity Amount ($VOLT)"
-                  value={betForm.parityAmount}
-                  onChange={(value) => setBetForm((current) => ({ ...current, parityAmount: value }))}
-                  borderClass="border-primary"
-                  valuePrefix="$"
-                  previewLabel="Equivalent"
-                  previewValue={parityEthPreview}
-                  subnote={getEthUsdStatusMessage(ethUsdStatus, ethUsdPrice)}
-                />
-
-                <div className="border border-outline-variant bg-surface-container-low p-3 sm:p-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="font-mono text-[9px] uppercase text-outline sm:text-[10px]">Parity Bet Summary</span>
-                    <span className="font-mono text-[9px] uppercase text-secondary sm:text-[10px]">Single Pool Entry</span>
-                  </div>
-                  <div className="mt-4 space-y-3 text-sm">
-                    {/*<SummaryRow label="Stake" value={`${Number(betForm.parityAmount || 0).toFixed(2)} $VOLT`} />*/}
-                    <SummaryRow label="Stake" value={`${(convertUsdToEthAmount(betForm.parityAmount, ethUsdPrice) || 0).toFixed(6)} $VOLT`} />
-                    {/*<SummaryRow label="ETH Equivalent" value={`${(convertUsdToEthAmount(betForm.parityAmount, ethUsdPrice) || 0).toFixed(6)} ETH`} />*/}
-                    <SummaryRow label="Selected Parity" value={betForm.parityEven ? "EVEN" : "ODD"} />
-                  </div>
-                </div>
-
-                <button
-                  onClick={() =>
-                    writeContract(
-                      (contract) => {
-                        const parityEthAmount = convertUsdToEthAmount(betForm.parityAmount, ethUsdPrice);
-                        if (parityEthAmount === null) throw new Error("ETH/USD price unavailable");
-                        return contract.placeBet(BigInt(betForm.dice), betForm.parityEven, 0n, ethers.parseEther(parityEthAmount.toFixed(18)));
-                      },
-                      "Submitting parity bet...",
-                      "Parity bet placed."
-                    )
-                  }
-                  className="glow-primary w-full bg-primary py-4 font-headline text-base font-black uppercase tracking-tight text-on-primary transition-all active:scale-95 sm:py-5 sm:text-xl sm:tracking-tighter"
-                >
-                  Place Parity Bet
-                </button>
-              </section>
-            </div>
+            </div>*/
           ) : null}
 
         </section>
@@ -1733,10 +2203,10 @@ function getEthUsdStatusMessage(status, ethUsdPrice) {
   return "Price status unavailable";
 }
 
-function WalletPage({ snapshot, writeContract, walletConnected, roundCountdown, roundCountdownLabel, ethUsdPrice, ethUsdStatus }) {
+function WalletPage({ snapshot, snapshotLoading, approveVoltIfNeeded, writeContract, walletConnected, roundCountdown, roundCountdownLabel }) {
   return (
     <>
-      <StatusStrip snapshot={snapshot} walletConnected={walletConnected} roundCountdown={roundCountdown} roundCountdownLabel={roundCountdownLabel} />
+      <StatusStrip snapshot={snapshot} walletConnected={walletConnected} roundCountdown={roundCountdown} roundCountdownLabel={roundCountdownLabel} snapshotLoading={snapshotLoading} />
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-4 sm:space-y-8 sm:py-6">
         
 
@@ -1745,53 +2215,51 @@ function WalletPage({ snapshot, writeContract, walletConnected, roundCountdown, 
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-emerald-400">ev_station</span>
-                <h3 className="font-headline text-sm font-bold uppercase sm:text-lg">Power Station</h3>
+                <h3 className="font-headline text-sm font-bold uppercase sm:text-lg">Wallet Funding</h3>
               </div>
               <span className="bg-emerald-500/10 px-2 py-1 font-mono text-[8px] uppercase text-emerald-400">Operational</span>
             </div>
             <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-5">
+              <div className="border border-outline-variant bg-surface-container-low p-3 text-sm text-outline">
+                Set how much $VOLT VoltSonic is allowed to use from your wallet. The tokens remain in your wallet until you actually place a bet.
+              </div>
               <InlineAction
-                label="Deposit Value"
+                label="Set Wallet Spend Limit"
                 placeholder="0.00"
-                buttonLabel="Charge"
+                buttonLabel="Enable Spend"
                 buttonClass="border-emerald-500/40 text-emerald-300 hover:border-emerald-400 hover:text-emerald-200"
                 valuePrefix="$"
-                previewLabel="You send"
-                previewValue={(value) => formatUsdToEthPreview(value, ethUsdPrice)}
-                subnote={getEthUsdStatusMessage(ethUsdStatus, ethUsdPrice)}
+                previewLabel="Spend Limit"
+                previewValue={(value) => formatTokenInputPreview(value)}
+                subnote={snapshotLoading ? "Loading spend limit..." : `Current spend limit: ${snapshot.tokenAllowance}`}
                 onAction={(value) =>
                   writeContract(
-                    (contract) => {
-                      const ethAmount = convertUsdToEthAmount(value, ethUsdPrice);
-                      if (ethAmount === null) throw new Error("ETH/USD price unavailable");
-                      return contract.charge({ value: ethers.parseEther(ethAmount.toFixed(18)) });
+                    async (_contract, signer) => {
+                      const amount = parseTokenAmount(value);
+                      if (amount <= 0n) throw new Error("Enter a VOLT amount");
+                      const tokenContract = new ethers.Contract(snapshot.tokenAddress, VOLT_ERC20_ABI, signer);
+                      return tokenContract.approve(CONTRACT_ADDRESS, amount);
                     },
-                    "Charging credits...",
-                    "Credits charged."
+                    "Updating wallet spend limit...",
+                    "Wallet spend limit updated."
                   )
                 }
               />
-              <InlineAction
-                label="Withdraw Value"
-                placeholder="0.00"
-                buttonLabel="Discharge"
-                buttonClass="border-amber-500/40 text-amber-300 hover:border-amber-400 hover:text-amber-200"
-                valuePrefix="$"
-                previewLabel="You receive"
-                previewValue={(value) => formatUsdToEthPreview(value, ethUsdPrice)}
-                subnote={getEthUsdStatusMessage(ethUsdStatus, ethUsdPrice)}
-                onAction={(value) =>
-                  writeContract(
-                    (contract) => {
-                      const ethAmount = convertUsdToEthAmount(value, ethUsdPrice);
-                      if (ethAmount === null) throw new Error("ETH/USD price unavailable");
-                      return contract.discharge(ethers.parseEther(ethAmount.toFixed(18)));
-                    },
-                    "Withdrawing ETH...",
-                    "Withdrawal complete."
-                  )
-                }
-              />
+              <div className="border border-outline-variant bg-surface-container-highest p-3 sm:p-4">
+                {snapshotLoading ? (
+                  <>
+                    <SummaryRowSkeleton />
+                    <SummaryRowSkeleton topMargin />
+                    <SummaryRowSkeleton topMargin />
+                  </>
+                ) : (
+                  <>
+                    <SummaryRow label="Available Wallet Credit" value={snapshot.credits} />
+                    <SummaryRow label="VoltSonic Spend Limit" value={snapshot.tokenAllowance} topMargin />
+                    <SummaryRow label="VOLT Token" value={shortAddress(snapshot.tokenAddress)} topMargin />
+                  </>
+                )}
+              </div>
             </div>
           </section>
 
@@ -1801,17 +2269,31 @@ function WalletPage({ snapshot, writeContract, walletConnected, roundCountdown, 
                 <span className="material-symbols-outlined text-secondary">toll</span>
                 <h3 className="font-headline text-sm font-bold uppercase sm:text-lg">Claim Center</h3>
               </div>
-              <span className="font-mono text-[9px] text-outline sm:text-[10px]">{snapshot.latestSettledRound}</span>
+              <span className="font-mono text-[9px] text-outline sm:text-[10px]">{snapshotLoading ? "Loading..." : snapshot.latestSettledRound || "--"}</span>
             </div>
             <div className="mt-4 space-y-4 sm:mt-6">
               <div className="border border-outline-variant bg-surface-container-highest p-3 sm:p-4">
-                <SummaryRow label="Pool Reward" value={snapshot.claimPoolReward} />
-                <SummaryRow label="Jackpot Reward" value={snapshot.claimJackpotReward} topMargin />
-                <SummaryRow label="House Fee" value={snapshot.claimFee} topMargin error />
+                {snapshotLoading ? (
+                  <>
+                    <SummaryRowSkeleton />
+                    <SummaryRowSkeleton topMargin />
+                    <SummaryRowSkeleton topMargin />
+                  </>
+                ) : (
+                  <>
+                    <SummaryRow label="Pool Reward" value={snapshot.claimPoolReward} />
+                    <SummaryRow label="Jackpot Reward" value={snapshot.claimJackpotReward} topMargin />
+                    <SummaryRow label="House Fee" value={snapshot.claimFee} topMargin error />
+                  </>
+                )}
               </div>
               <div className="border-l-4 border-primary bg-surface-container-low p-3 sm:p-4">
                 <div className="font-mono text-[9px] uppercase text-outline sm:text-[10px]">Net Claimable</div>
-                <div className="mt-2 text-xl font-headline font-black text-primary sm:text-3xl">{snapshot.claimNet}</div>
+                {snapshotLoading ? (
+                  <SkeletonText width="w-32" className="mt-2 h-8" />
+                ) : (
+                  <div className="mt-2 text-xl font-headline font-black text-primary sm:text-3xl">{snapshot.claimNet}</div>
+                )}
               </div>
               <button
                 onClick={() =>
@@ -1821,7 +2303,8 @@ function WalletPage({ snapshot, writeContract, walletConnected, roundCountdown, 
                     "Claim complete."
                   )
                 }
-                className="w-full bg-emerald-500 py-3.5 font-headline text-sm font-black uppercase tracking-tight text-white transition-all hover:bg-emerald-400 active:scale-95 sm:py-4 sm:text-lg sm:tracking-tighter"
+                disabled={snapshotLoading || !snapshot.latestSettledRound}
+                className="w-full bg-emerald-500 py-3.5 font-headline text-sm font-black uppercase tracking-tight text-white transition-all hover:bg-emerald-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:py-4 sm:text-lg sm:tracking-tighter"
               >
                 Claim Winnings
               </button>
@@ -1874,7 +2357,7 @@ function BetHistoryCard({ bet }) {
           <div className="font-mono text-[9px] uppercase text-outline">Round Result</div>
           <div className="mt-2 flex flex-wrap gap-3 text-sm text-on-surface">
             <span>Dice Result: {bet.diceResult}</span>
-            <span>Parity Result: {bet.parityResult}</span>
+            {/*<span>Parity Result: {bet.parityResult}</span>*/}
             {bet.result !== "lost" ? <span className="text-emerald-400">{bet.claimed ? "Winnings claimed" : "Winning bet"}</span> : null}
           </div>
         </div>
@@ -1883,16 +2366,66 @@ function BetHistoryCard({ bet }) {
   );
 }
 
-function BetsPage({ snapshot, betHistory, walletConnected, roundCountdown, roundCountdownLabel }) {
+function ClosedBetListItem({ bet }) {
+  const outcomeStyles = getOutcomeStyles(bet.result);
+  const totalStake = BigInt(bet.diceAmount) + BigInt(bet.parityAmount);
+
+  return (
+    <li className="border-b border-outline-variant last:border-b-0">
+      <article className="bg-surface-container-high px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="font-headline text-sm font-bold uppercase sm:text-base">Round #{bet.roundId}</div>
+            <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.24em] text-outline">
+              Closed Bet
+            </div>
+          </div>
+          <span className={`w-fit border px-2 py-1 font-mono text-[10px] uppercase ${outcomeStyles.badge}`}>
+            {formatOutcomeLabel(bet.result)}
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div>
+            <div className="font-mono text-[9px] uppercase text-outline">Selections</div>
+            <div className="mt-2 space-y-1 text-sm text-on-surface">
+              {bet.betOnDice ? <div>Dice: {bet.diceChoice}</div> : null}
+              {bet.betOnParity ? <div>Parity: {bet.parityChoice}</div> : null}
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[9px] uppercase text-outline">Outcome</div>
+            <div className="mt-2 space-y-1 text-sm text-on-surface">
+              <div>Dice Result: {bet.diceResult ?? "--"}</div>
+              <div>Parity Result: {bet.parityResult}</div>
+            </div>
+          </div>
+          <div>
+            <div className="font-mono text-[9px] uppercase text-outline">Stake</div>
+            <div className="mt-2 space-y-1 text-sm text-on-surface">
+              {bet.betOnDice ? <div>Dice Pool: {formatVolt(bet.diceAmount)}</div> : null}
+              {bet.betOnParity ? <div>Parity Pool: {formatVolt(bet.parityAmount)}</div> : null}
+              <div className="font-bold text-primary">Total: {formatVolt(totalStake)}</div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </li>
+  );
+}
+
+function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, walletConnected, roundCountdown, roundCountdownLabel }) {
   const openBets = betHistory.filter((bet) => bet.result === "open");
   const closedBets = betHistory.filter((bet) => bet.result !== "open");
+  const showConnectPrompt = !walletConnected && !betHistoryLoading;
 
   return (
     <>
-      <StatusStrip snapshot={snapshot} walletConnected={walletConnected} roundCountdown={roundCountdown} roundCountdownLabel={roundCountdownLabel} />
+      <StatusStrip snapshot={snapshot} walletConnected={walletConnected} roundCountdown={roundCountdown} roundCountdownLabel={roundCountdownLabel} snapshotLoading={snapshotLoading} />
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-4 sm:space-y-8 sm:py-6">
         <HeroPanel
           snapshot={snapshot}
+          snapshotLoading={snapshotLoading}
           title=""
           copy=""
           icon="receipt_long"
@@ -1903,11 +2436,17 @@ function BetsPage({ snapshot, betHistory, walletConnected, roundCountdown, round
             <div>
               <h2 className="font-headline text-base font-bold uppercase tracking-tight sm:text-xl">Bet Ledger</h2>
               <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-secondary sm:text-[10px] sm:tracking-[0.3em]">
-                Recent bets ordered newest first
+                Open bets and closed bets for the connected wallet
               </span>
             </div>
-            <span className="font-mono text-[10px] uppercase text-outline">{betHistory.length} total</span>
+            <span className="font-mono text-[10px] uppercase text-outline">{betHistoryLoading ? "Loading..." : `${betHistory.length} total`}</span>
           </div>
+
+          {showConnectPrompt ? (
+            <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
+              Connect your wallet to list your open bets and closed bets.
+            </div>
+          ) : null}
 
           <div className="grid gap-6 xl:grid-cols-2">
             <section className="space-y-3">
@@ -1917,11 +2456,22 @@ function BetsPage({ snapshot, betHistory, walletConnected, roundCountdown, round
                   {openBets.length}
                 </span>
               </div>
-              {openBets.length > 0 ? (
+              {betHistoryLoading ? (
+                Array.from({ length: 2 }, (_, index) => (
+                  <div key={`open-skeleton-${index}`} className="border border-outline-variant bg-surface-container-high p-5">
+                    <SkeletonText width="w-28" className="h-5" />
+                    <SkeletonText width="w-20" className="mt-2 h-3" />
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <SkeletonBlock className="h-24 w-full" />
+                      <SkeletonBlock className="h-24 w-full" />
+                    </div>
+                  </div>
+                ))
+              ) : openBets.length > 0 ? (
                 openBets.map((bet) => <BetHistoryCard key={bet.id} bet={bet} />)
               ) : (
                 <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
-                  No open bets yet.
+                  {walletConnected ? "No open bets yet." : "No open bets to show until a wallet is connected."}
                 </div>
               )}
             </section>
@@ -1933,11 +2483,24 @@ function BetsPage({ snapshot, betHistory, walletConnected, roundCountdown, round
                   {closedBets.length}
                 </span>
               </div>
-              {closedBets.length > 0 ? (
-                closedBets.map((bet) => <BetHistoryCard key={bet.id} bet={bet} />)
+              {betHistoryLoading ? (
+                Array.from({ length: 2 }, (_, index) => (
+                  <div key={`closed-skeleton-${index}`} className="border border-outline-variant bg-surface-container-high p-5">
+                    <SkeletonText width="w-28" className="h-5" />
+                    <SkeletonText width="w-20" className="mt-2 h-3" />
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <SkeletonBlock className="h-24 w-full" />
+                      <SkeletonBlock className="h-24 w-full" />
+                    </div>
+                  </div>
+                ))
+              ) : closedBets.length > 0 ? (
+                <ul className="max-h-[32rem] overflow-y-auto border border-outline-variant bg-surface-container-high">
+                  {closedBets.map((bet) => <ClosedBetListItem key={bet.id} bet={bet} />)}
+                </ul>
               ) : (
                 <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
-                  No settled bets yet.
+                  {walletConnected ? "No closed bets yet." : "No closed bets to show until a wallet is connected."}
                 </div>
               )}
             </section>
@@ -1948,13 +2511,14 @@ function BetsPage({ snapshot, betHistory, walletConnected, roundCountdown, round
   );
 }
 
-function RoundsPage({ snapshot, roundFeed, walletConnected, roundCountdown, roundCountdownLabel }) {
+function RoundsPage({ snapshot, snapshotLoading, roundFeed, walletConnected, roundCountdown, roundCountdownLabel }) {
   return (
     <>
-      <StatusStrip snapshot={snapshot} walletConnected={walletConnected} roundCountdown={roundCountdown} roundCountdownLabel={roundCountdownLabel} />
+      <StatusStrip snapshot={snapshot} walletConnected={walletConnected} roundCountdown={roundCountdown} roundCountdownLabel={roundCountdownLabel} snapshotLoading={snapshotLoading} />
       <main className="mx-auto max-w-7xl space-y-8 px-4 py-6">
         <HeroPanel
           snapshot={snapshot}
+          snapshotLoading={snapshotLoading}
           title="Treasury visibility and round history have their own route."
           copy="This route is dedicated to watching contract balance, jackpot state, contribution totals, and recent round activity."
           icon="leaderboard"
@@ -1967,10 +2531,10 @@ function RoundsPage({ snapshot, roundFeed, walletConnected, roundCountdown, roun
               <h3 className="font-headline text-lg font-bold uppercase">Treasury Metrics</h3>
             </div>
             <div className="mt-6 space-y-3">
-              <MetricCard label="Contract Balance" value={snapshot.contractBalance} />
-              <MetricCard label="Redeemable Credits" value={snapshot.redeemableCredits} />
-              <MetricCard label="Total ETH Contributed" value={snapshot.totalEthContributed} />
-              <MetricCard label="Jackpot Balance" value={snapshot.jackpotBalance} accent />
+              <MetricCard label="Contract VOLT" value={snapshotLoading ? <SkeletonText width="w-28" className="h-6" /> : snapshot.contractBalance} />
+              <MetricCard label="Tracked Vault VOLT" value={snapshotLoading ? <SkeletonText width="w-28" className="h-6" /> : snapshot.redeemableCredits} />
+              <MetricCard label="Total VOLT Inflow" value={snapshotLoading ? <SkeletonText width="w-28" className="h-6" /> : snapshot.totalEthContributed} />
+              <MetricCard label="Jackpot VOLT" value={snapshotLoading ? <SkeletonText width="w-28" className="h-6" /> : snapshot.jackpotBalance} accent />
             </div>
           </section>
 
@@ -1980,15 +2544,26 @@ function RoundsPage({ snapshot, roundFeed, walletConnected, roundCountdown, roun
               <h3 className="font-headline text-lg font-bold uppercase">Round Feed</h3>
             </div>
             <div className="mt-6 space-y-3">
-              {roundFeed.map((card) => (
-                <div key={card.title} className="border border-outline-variant bg-surface-container-highest p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-on-surface">{card.title}</span>
-                    <span className={`font-mono text-[10px] uppercase ${card.stateClass}`}>{card.state}</span>
-                  </div>
-                  <div className="mt-2 text-sm text-outline">{card.body}</div>
-                </div>
-              ))}
+              {snapshotLoading
+                ? Array.from({ length: 3 }, (_, index) => (
+                    <div key={`round-feed-skeleton-${index}`} className="border border-outline-variant bg-surface-container-highest p-4">
+                      <div className="flex items-center justify-between">
+                        <SkeletonText width="w-28" className="h-4" />
+                        <SkeletonText width="w-16" className="h-3" />
+                      </div>
+                      <SkeletonText width="w-full" className="mt-3 h-3" />
+                      <SkeletonText width="w-5/6" className="mt-2 h-3" />
+                    </div>
+                  ))
+                : roundFeed.map((card) => (
+                    <div key={card.title} className="border border-outline-variant bg-surface-container-highest p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs text-on-surface">{card.title}</span>
+                        <span className={`font-mono text-[10px] uppercase ${card.stateClass}`}>{card.state}</span>
+                      </div>
+                      <div className="mt-2 text-sm text-outline">{card.body}</div>
+                    </div>
+                  ))}
             </div>
           </section>
         </section>
@@ -1997,7 +2572,7 @@ function RoundsPage({ snapshot, roundFeed, walletConnected, roundCountdown, roun
   );
 }
 
-function AdminPage({ snapshot, adminForm, setAdminForm, roundFeed, writeContract, account }) {
+function AdminPage({ snapshot, adminForm, setAdminForm, roundFeed, approveVoltIfNeeded, writeContract, account }) {
   const bettingStateStyles = getBettingStateStyles(snapshot.bettingOpen);
 
   return (
@@ -2068,19 +2643,24 @@ function AdminPage({ snapshot, adminForm, setAdminForm, roundFeed, writeContract
               <h3 className="font-headline text-lg font-bold uppercase">Jackpot Funding</h3>
             </div>
             <div className="mt-6 border border-outline-variant bg-surface-container-highest p-4">
-              <label className="mb-2 block font-mono text-[10px] uppercase text-outline">Seed Jackpot With ETH</label>
+              <label className="mb-2 block font-mono text-[10px] uppercase text-outline">Seed Jackpot With VOLT</label>
               <div className="flex gap-3">
                 <input
                   value={adminForm.jackpotSeed}
                   onChange={(event) => setAdminForm((current) => ({ ...current, jackpotSeed: event.target.value }))}
                   className="w-full border border-outline-variant bg-surface-container-high px-4 py-3 text-sm text-on-surface focus:border-primary focus:ring-0"
                   type="number"
-                  placeholder="ETH amount"
+                  placeholder="VOLT amount"
                 />
                 <button
                   onClick={() =>
                     writeContract(
-                      (contract) => contract.seedJackpot({ value: ethers.parseEther(adminForm.jackpotSeed || "0") }),
+                      async (contract, signer) => {
+                        const amount = parseTokenAmount(adminForm.jackpotSeed);
+                        if (amount <= 0n) throw new Error("Enter a VOLT amount");
+                        await approveVoltIfNeeded(signer, amount);
+                        return contract.seedJackpot(amount);
+                      },
                       "Funding jackpot...",
                       "Jackpot funded."
                     )
@@ -2138,9 +2718,9 @@ function AdminPage({ snapshot, adminForm, setAdminForm, roundFeed, writeContract
               <h3 className="font-headline text-lg font-bold uppercase">Admin Metrics</h3>
             </div>
             <div className="mt-6 space-y-3">
-              <MetricCard label="Total ETH Contributed" value={snapshot.totalEthContributed} />
-              <MetricCard label="Redeemable Credits" value={snapshot.redeemableCredits} />
-              <MetricCard label="Current Jackpot Balance" value={snapshot.jackpotBalance} accent />
+              <MetricCard label="Total VOLT Inflow" value={snapshot.totalEthContributed} />
+              <MetricCard label="Tracked Vault VOLT" value={snapshot.redeemableCredits} />
+              <MetricCard label="Current Jackpot VOLT" value={snapshot.jackpotBalance} accent />
               <MetricCard label="Owner Wallet" value={account ? shortAddress(account) : "Not connected"} />
             </div>
           </section>
@@ -2177,7 +2757,9 @@ export default function App() {
     networkName: voltsonic.networkName,
     statusMessage: voltsonic.statusMessage,
     toasts: voltsonic.toasts,
+    resultModal: voltsonic.resultModal,
     dismissToast: voltsonic.dismissToast,
+    dismissResultModal: voltsonic.dismissResultModal,
   };
 
   return (
@@ -2188,8 +2770,10 @@ export default function App() {
           <Shell {...commonShellProps} title="VOLTSONIC" icon="bolt">
             <GamePage
               snapshot={voltsonic.snapshot}
+              snapshotLoading={voltsonic.snapshotLoading}
               betForm={voltsonic.betForm}
               setBetForm={voltsonic.setBetForm}
+              approveVoltIfNeeded={voltsonic.approveVoltIfNeeded}
               writeContract={voltsonic.writeContract}
               walletConnected={Boolean(voltsonic.account)}
               roundCountdown={voltsonic.roundCountdown}
@@ -2206,6 +2790,8 @@ export default function App() {
           <Shell {...commonShellProps} title="VOLTSONIC" icon="bolt">
             <WalletPage
               snapshot={voltsonic.snapshot}
+              snapshotLoading={voltsonic.snapshotLoading}
+              approveVoltIfNeeded={voltsonic.approveVoltIfNeeded}
               writeContract={voltsonic.writeContract}
               walletConnected={Boolean(voltsonic.account)}
               roundCountdown={voltsonic.roundCountdown}
@@ -2222,7 +2808,9 @@ export default function App() {
           <Shell {...commonShellProps} title="VOLTSONIC" icon="bolt">
             <BetsPage
               snapshot={voltsonic.snapshot}
+              snapshotLoading={voltsonic.snapshotLoading}
               betHistory={voltsonic.betHistory}
+              betHistoryLoading={voltsonic.betHistoryLoading}
               walletConnected={Boolean(voltsonic.account)}
               roundCountdown={voltsonic.roundCountdown}
               roundCountdownLabel={voltsonic.roundCountdownLabel}
@@ -2236,6 +2824,7 @@ export default function App() {
           <Shell {...commonShellProps} title="VOLTSONIC" icon="bolt">
             <RoundsPage
               snapshot={voltsonic.snapshot}
+              snapshotLoading={voltsonic.snapshotLoading}
               roundFeed={voltsonic.roundFeed}
               walletConnected={Boolean(voltsonic.account)}
               roundCountdown={voltsonic.roundCountdown}
@@ -2253,6 +2842,7 @@ export default function App() {
               adminForm={voltsonic.adminForm}
               setAdminForm={voltsonic.setAdminForm}
               roundFeed={voltsonic.roundFeed}
+              approveVoltIfNeeded={voltsonic.approveVoltIfNeeded}
               writeContract={voltsonic.writeContract}
               account={voltsonic.account}
             />

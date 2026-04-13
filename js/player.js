@@ -51,8 +51,8 @@
         return;
       }
 
-      const { contract } = await app.getRuntime();
-      const credits = await contract.voltCredits(connectedAddress);
+      const { tokenContract } = await app.getRuntime();
+      const credits = await tokenContract.balanceOf(connectedAddress);
       app.setText("credits-balance", app.formatVolt(credits));
     } catch (error) {
       app.setText("wallet-status", "Not Connected");
@@ -61,23 +61,23 @@
 
   async function refreshOverview() {
     try {
-      const { contract, provider, contractAddress } = await app.getRuntime();
+      const { contract, tokenContract, contractAddress } = await app.getRuntime();
       const [currentState, totalVaultDeposits, totalEthContributed, contractBalance] = await Promise.all([
         contract.getCurrentRoundState(),
         contract.totalVaultDeposits(),
         contract.totalEthContributed(),
-        provider.getBalance(contractAddress),
+        tokenContract.balanceOf(contractAddress),
       ]);
 
       const [roundId, isBettingOpen, , , currentJackpot, minimumBet] = currentState;
       app.setText("current-round-display", `#${roundId}`);
       app.setText("betting-state-display", isBettingOpen ? "OPEN" : "CLOSED");
-      app.setText("jackpot-balance-display", app.formatEth(currentJackpot));
+      app.setText("jackpot-balance-display", app.formatVolt(currentJackpot));
       app.setText("min-bet-display", ethers.formatEther(minimumBet));
-      app.setText("contract-balance-display", app.formatEth(contractBalance));
+      app.setText("contract-balance-display", app.formatVolt(contractBalance));
       app.setText("redeemable-credits-display", app.formatVolt(totalVaultDeposits));
-      app.setText("total-contributed-display", app.formatEth(totalEthContributed));
-      app.setText("treasury-jackpot-display", app.formatEth(currentJackpot));
+      app.setText("total-contributed-display", app.formatVolt(totalEthContributed));
+      app.setText("treasury-jackpot-display", app.formatVolt(currentJackpot));
     } catch (error) {
       app.showStatus(error.message, true);
     }
@@ -117,7 +117,7 @@
               <span class="font-mono text-xs text-on-surface">Round #${roundId}</span>
               <span class="font-mono text-[10px] uppercase text-primary">Settled</span>
             </div>
-            <div class="mt-2 text-sm text-outline">Dice ${result}, parity ${parityResult ? "even" : "odd"}, jackpot ${app.formatEth(totalJackpot)}</div>
+            <div class="mt-2 text-sm text-outline">Dice ${result}, parity ${parityResult ? "even" : "odd"}, jackpot ${app.formatVolt(totalJackpot)}</div>
           </div>
         `;
       }).join("");
@@ -155,7 +155,7 @@
       }
 
       app.setText("claim-pool-reward", app.formatVolt(poolReward));
-      app.setText("claim-jackpot-reward", app.formatEth(jackpotReward));
+      app.setText("claim-jackpot-reward", app.formatVolt(jackpotReward));
       app.setText("claim-house-fee", app.formatVolt(totalFee));
       app.setText("claim-net-winnings", app.formatVolt(netWinnings));
       app.setText("claim-round-label", `Latest settled round: #${state.latestSettledRoundId}`);
@@ -164,34 +164,17 @@
     }
   }
 
-  async function chargeCredits() {
+  async function approveVolt() {
     try {
       const amount = document.getElementById("charge-amount-input").value;
       const parsed = app.parseAmountInput(amount);
-      if (parsed <= 0n) throw new Error("Enter a deposit amount.");
+      if (parsed <= 0n) throw new Error("Enter a VOLT amount.");
 
-      const { contract } = await app.getRuntime({ requireSigner: true });
-      const tx = await contract.charge({ value: parsed });
-      app.showStatus("Charging credits...");
+      const { tokenContract, contractAddress } = await app.getRuntime({ requireSigner: true });
+      const tx = await tokenContract.approve(contractAddress, parsed);
+      app.showStatus("Submitting VOLT approval...");
       await tx.wait();
-      app.showStatus("Credits charged.");
-      await refreshAll();
-    } catch (error) {
-      app.showStatus(error.message, true);
-    }
-  }
-
-  async function dischargeCredits() {
-    try {
-      const amount = document.getElementById("discharge-amount-input").value;
-      const parsed = app.parseAmountInput(amount);
-      if (parsed <= 0n) throw new Error("Enter an amount to withdraw.");
-
-      const { contract } = await app.getRuntime({ requireSigner: true });
-      const tx = await contract.discharge(parsed);
-      app.showStatus("Withdrawing ETH...");
-      await tx.wait();
-      app.showStatus("Withdrawal complete.");
+      app.showStatus("VOLT approval updated.");
       await refreshAll();
     } catch (error) {
       app.showStatus(error.message, true);
@@ -206,7 +189,14 @@
         throw new Error("Enter a dice amount, a parity amount, or both.");
       }
 
-      const { contract } = await app.getRuntime({ requireSigner: true });
+      const { contract, tokenContract, contractAddress, connectedAddress } = await app.getRuntime({ requireSigner: true });
+      const allowance = await tokenContract.allowance(connectedAddress, contractAddress);
+      const requiredAmount = diceAmount + parityAmount;
+      if (allowance < requiredAmount) {
+        const approveTx = await tokenContract.approve(contractAddress, requiredAmount);
+        app.showStatus("Approving VOLT spend...");
+        await approveTx.wait();
+      }
       const tx = await contract.placeBet(state.selectedDice, state.selectedParityEven, diceAmount, parityAmount);
       app.showStatus("Submitting bet...");
       await tx.wait();
@@ -250,8 +240,8 @@
       }
     });
 
-    document.getElementById("charge-btn")?.addEventListener("click", chargeCredits);
-    document.getElementById("discharge-btn")?.addEventListener("click", dischargeCredits);
+    document.getElementById("charge-btn")?.addEventListener("click", approveVolt);
+    document.getElementById("discharge-btn")?.classList.add("hidden");
     document.getElementById("place-bet-btn")?.addEventListener("click", placeBet);
     document.getElementById("claim-btn")?.addEventListener("click", claimLatestRound);
 

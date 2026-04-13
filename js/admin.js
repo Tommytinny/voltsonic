@@ -3,23 +3,23 @@
 
   async function refreshAdminOverview() {
     try {
-      const { contract, provider, contractAddress, connectedAddress } = await app.getRuntime();
+      const { contract, tokenContract, contractAddress, connectedAddress } = await app.getRuntime();
       const [currentState, totalVaultDeposits, totalEthContributed, ownerAddress, contractBalance] = await Promise.all([
         contract.getCurrentRoundState(),
         contract.totalVaultDeposits(),
         contract.totalEthContributed(),
         contract.owner(),
-        provider.getBalance(contractAddress),
+        tokenContract.balanceOf(contractAddress),
       ]);
 
       const [roundId, isBettingOpen, , , currentJackpot] = currentState;
       app.setText("admin-round-status", isBettingOpen ? "OPEN" : "CLOSED");
       app.setText("admin-current-round", `#${roundId}`);
-      app.setText("admin-jackpot-balance", app.formatEth(currentJackpot));
-      app.setText("admin-contract-balance", app.formatEth(contractBalance));
-      app.setText("admin-total-contributed", app.formatEth(totalEthContributed));
+      app.setText("admin-jackpot-balance", app.formatVolt(currentJackpot));
+      app.setText("admin-contract-balance", app.formatVolt(contractBalance));
+      app.setText("admin-total-contributed", app.formatVolt(totalEthContributed));
       app.setText("admin-redeemable-credits", app.formatVolt(totalVaultDeposits));
-      app.setText("admin-jackpot-metric", app.formatEth(currentJackpot));
+      app.setText("admin-jackpot-metric", app.formatVolt(currentJackpot));
       app.setText("owner-address-display", ownerAddress);
       app.setText("admin-owner-wallet", connectedAddress ? app.shortAddress(connectedAddress) : "Not connected");
     } catch (error) {
@@ -59,7 +59,7 @@
               <span class="font-mono text-xs text-on-surface">Round #${roundId}</span>
               <span class="font-mono text-[10px] uppercase text-primary">Settled</span>
             </div>
-            <div class="mt-2 text-sm text-outline">Dice ${result}, parity ${parityResult ? "even" : "odd"}, jackpot ${app.formatEth(totalJackpot)}</div>
+            <div class="mt-2 text-sm text-outline">Dice ${result}, parity ${parityResult ? "even" : "odd"}, jackpot ${app.formatVolt(totalJackpot)}</div>
           </div>
         `;
       }).join("");
@@ -123,16 +123,22 @@
       try {
         parsed = app.parseAmountInput(value);
       } catch (error) {
-        app.showStatus("Enter a valid ETH amount.", true);
+        app.showStatus("Enter a valid VOLT amount.", true);
         return;
       }
 
       if (parsed <= 0n) {
-        app.showStatus("Enter an ETH amount to seed the jackpot.", true);
+        app.showStatus("Enter a VOLT amount to seed the jackpot.", true);
         return;
       }
 
-      runAdminAction((contract) => contract.seedJackpot({ value: parsed }), "Jackpot funded.");
+      runAdminAction(async (contract) => {
+        const { tokenContract, contractAddress } = await app.getRuntime({ requireSigner: true });
+        const approveTx = await tokenContract.approve(contractAddress, parsed);
+        app.showStatus("Approving VOLT for jackpot funding...");
+        await approveTx.wait();
+        return contract.seedJackpot(parsed);
+      }, "Jackpot funded.");
     });
 
     document.getElementById("update-min-bet-btn")?.addEventListener("click", () => {

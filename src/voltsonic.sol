@@ -38,6 +38,14 @@ interface AutomationCompatibleInterface {
     function performUpkeep(bytes calldata performData) external;
 }
 
+interface IERC20Lite {
+    function balanceOf(address account) external view returns (uint256);
+
+    function transfer(address to, uint256 amount) external returns (bool);
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
 contract VoltSonic is
     Initializable,
     OwnableUpgradeable,
@@ -54,7 +62,7 @@ contract VoltSonic is
     uint256 public minBet; 
     uint256 public roundDuration;
     uint256 public intermissionDuration;
-    uint256 public totalEthContributed;
+    uint256 public totalEthContributed; // Legacy name; tracks total VOLT inflow into the contract.
     uint256 public totalHouseFeesCollected;
     uint256 public lastRandomRequestId;
     address public vrfCoordinator;
@@ -63,10 +71,8 @@ contract VoltSonic is
     uint16 public vrfRequestConfirmations;
     uint32 public vrfCallbackGasLimit;
     bool public bettingOpen;
-
-    // Internal $VOLT Token System
-    mapping(address => uint256) public voltCredits; // This is the $VOLT balance
     uint256 public totalVaultDeposits;
+    IERC20Lite public voltToken;
 
     struct Bet {
         uint256 diceChoice; 
@@ -103,8 +109,6 @@ contract VoltSonic is
     mapping(uint256 => uint256) public requestToRound;
 
     // --- Events ---
-    event CreditsCharged(address indexed user, uint256 ethAmount, uint256 voltAmount);
-    event CreditsDischarged(address indexed user, uint256 voltAmount, uint256 ethAmount);
     event BetPlaced(
         address indexed user,
         uint256 indexed roundId,
@@ -125,14 +129,17 @@ contract VoltSonic is
         _disableInitializers();
     }
 
-    function initialize() initializer public {
-        __Ownable_init(msg.sender);
+    function initialize(address initialOwner, address voltTokenAddress) public initializer {
+        require(voltTokenAddress != address(0), "Token required");
+
+        __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
         __ReentrancyGuard_init();
 
+        voltToken = IERC20Lite(voltTokenAddress);
         houseFeePercent = 2;
         jackpotSeedPercent = 20;
-        minBet = 0.0004 ether; // 0.0004 $VOLT
+        minBet = 0.0004 ether; // 0.0004 VOLT with 18 decimals
         roundDuration = 3 minutes;
         intermissionDuration = 1 minutes;
         vrfRequestConfirmations = 3;
@@ -228,33 +235,17 @@ contract VoltSonic is
         _advanceToNextRound(_rid);
     }
 
-    // --- $VOLT Token Logic (The Bank) ---
+    // --- Token Helpers ---
 
-    /**
-     * @dev Swap ETH for $VOLT tokens 1:1
-     */
-    function charge() external payable nonReentrant {
-        require(msg.value > 0, "Must send ETH to get $VOLT");
-        voltCredits[msg.sender] += msg.value;
-        totalVaultDeposits += msg.value;
-        totalEthContributed += msg.value;
-        emit CreditsCharged(msg.sender, msg.value, msg.value);
+    function _pullVolt(address from, uint256 amount) internal {
+        require(voltToken.transferFrom(from, address(this), amount), "VOLT transferFrom failed");
+        totalVaultDeposits += amount;
+        totalEthContributed += amount;
     }
 
-    /**
-     * @dev Swap $VOLT tokens back for ETH
-     */
-    function discharge(uint256 _amount) external nonReentrant {
-        require(voltCredits[msg.sender] >= _amount, "Insufficient $VOLT balance");
-        require(address(this).balance >= jackpotBalance + _amount, "Insufficient liquid ETH");
-        
-        voltCredits[msg.sender] -= _amount;
-        totalVaultDeposits -= _amount;
-
-        (bool success, ) = payable(msg.sender).call{value: _amount}("");
-        require(success, "ETH withdrawal failed");
-        
-        emit CreditsDischarged(msg.sender, _amount, _amount);
+    function _pushVolt(address to, uint256 amount) internal {
+        require(voltToken.transfer(to, amount), "VOLT transfer failed");
+        totalVaultDeposits -= amount;
     }
 
     // --- Game Logic ---
@@ -266,7 +257,6 @@ contract VoltSonic is
 
         uint256 totalBetAmount = _diceAmount + _parityAmount;
         require(totalBetAmount >= minBet, "Bet below minimum");
-        require(voltCredits[msg.sender] >= totalBetAmount, "Insufficient $VOLT. Please charge.");
         if (_diceAmount > 0) require(_diceAmount >= minBet, "Dice bet below minimum");
         if (_parityAmount > 0) require(_parityAmount >= minBet, "Parity bet below minimum");
 
@@ -274,9 +264,7 @@ contract VoltSonic is
         Bet storage bet = userBets[msg.sender][currentRid];
         require(!bet.betOnDice && !bet.betOnParity, "Bet already placed for round");
 
-        // Deduct from $VOLT balance
-        voltCredits[msg.sender] -= totalBetAmount;
-        totalVaultDeposits -= totalBetAmount;
+        _pullVolt(msg.sender, totalBetAmount);
 
         if (_diceAmount > 0) {
             require(_diceNum >= 1 && _diceNum <= 6, "Invalid Dice");
@@ -388,19 +376,15 @@ contract VoltSonic is
         uint256 seedAmount = (totalFee * jackpotSeedPercent) / 100;
         jackpotBalance += seedAmount; 
         
-        // Add winnings to $VOLT balance
         uint256 netWinnings = reward - totalFee;
-        voltCredits[msg.sender] += netWinnings;
-        totalVaultDeposits += netWinnings;
-        
+        uint256 ownerFee = totalFee - seedAmount;
+
         emit WinningsCredited(msg.sender, _rid, netWinnings);
 
-        // Send house fee to owner (actual ETH transfer)
-        uint256 ownerFee = totalFee - seedAmount;
-        require(address(this).balance >= totalVaultDeposits + jackpotBalance + ownerFee, "Insufficient ETH for fee payout");
-
-        (bool success, ) = payable(owner()).call{value: ownerFee}("");
-        require(success, "House fee transfer failed");
+        _pushVolt(msg.sender, netWinnings);
+        if (ownerFee > 0) {
+            _pushVolt(owner(), ownerFee);
+        }
     }
 
     // --- View Helpers ---
@@ -585,12 +569,36 @@ contract VoltSonic is
         vrfRequestConfirmations = _vrfRequestConfirmations;
         vrfCallbackGasLimit = _vrfCallbackGasLimit;
     }
-    function seedJackpot() external payable onlyOwner {
-        jackpotBalance += msg.value;
-        totalEthContributed += msg.value;
+    function seedJackpot(uint256 amount) external onlyOwner {
+        require(amount > 0, "Amount required");
+        _pullVolt(msg.sender, amount);
+        jackpotBalance += amount;
     }
     function setBettingOpen(bool _isOpen) external onlyOwner {
         bettingOpen = _isOpen;
         emit BettingStatusUpdated(_isOpen);
     }
+    function forceSettleEmptyRound(uint256 _rid) external onlyOwner {
+        Round storage round = rounds[_rid];
+        require(!round.settled && round.totalDicePool == 0 && round.totalParityPool == 0);
+        round.diceResult = 1; // Default
+        round.parityResult = false;
+        round.snapshotJackpot = jackpotBalance;
+        round.settled = true;
+        emit RoundSettled(_rid, 1, false, jackpotBalance);
+        _advanceToNextRound(_rid);
+    }
+    function forceSettleRound(uint256 _rid, uint256 _dice) external onlyOwner {
+        require(_dice >= 1 && _dice <= 6, "Invalid dice");
+        Round storage round = rounds[_rid];
+        require(!round.settled, "Already settled");
+        round.diceResult = _dice;
+        round.parityResult = (_dice % 2 == 0);
+        round.snapshotJackpot = jackpotBalance;
+        round.settled = true;
+        emit RoundSettled(_rid, _dice, round.parityResult, round.snapshotJackpot);
+        _advanceToNextRound(_rid);
+    }
+
+    receive() external payable {}
 }

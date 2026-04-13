@@ -84,3 +84,5 @@ curl -X POST "http://127.0.0.1:8000/api/v1/sync?from_block=39806939&max_blocks=2
 - `INDEXER_BLOCK_CHUNK_SIZE`
 
 The default chunk size is `10` blocks to stay compatible with tight free-tier RPC log limits.
+
+For the token-based VoltSonic flow, set `VOLTSONIC_CONTRACT_ADDRESS` to the deployed VoltSonic proxy address, not the `$VOLT` ERC-20 token address.

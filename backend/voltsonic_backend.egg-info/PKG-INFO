@@ -7,6 +7,7 @@ Description-Content-Type: text/markdown
 Requires-Dist: fastapi<1.0.0,>=0.115.0
 Requires-Dist: uvicorn[standard]<1.0.0,>=0.30.0
 Requires-Dist: sqlalchemy<3.0.0,>=2.0.36
+Requires-Dist: greenlet<4.0.0,>=3.1.1
 Requires-Dist: asyncpg<1.0.0,>=0.30.0
 Requires-Dist: psycopg[binary]<4.0.0,>=3.2.0
 Requires-Dist: alembic<2.0.0,>=1.14.0
@@ -67,10 +68,16 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 `http://127.0.0.1:8000/docs`
 
-7. Trigger a sync:
+7. Trigger a bounded sync:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/sync
+curl -X POST "http://127.0.0.1:8000/api/v1/sync?max_blocks=200"
+```
+
+For the first backfill from the deployment block, you can be more explicit:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/sync?from_block=39806939&max_blocks=200"
 ```
 
 ## Current routes
@@ -93,3 +100,5 @@ curl -X POST http://127.0.0.1:8000/api/v1/sync
 - `INDEXER_BLOCK_CHUNK_SIZE`
 
 The default chunk size is `10` blocks to stay compatible with tight free-tier RPC log limits.
+
+For the token-based VoltSonic flow, set `VOLTSONIC_CONTRACT_ADDRESS` to the deployed VoltSonic proxy address, not the `$VOLT` ERC-20 token address.

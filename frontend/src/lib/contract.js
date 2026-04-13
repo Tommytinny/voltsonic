@@ -4,16 +4,14 @@ export const VOLTSONIC_ABI = [
   "event BetPlaced(address indexed user, uint256 indexed roundId, uint256 diceAmount, uint256 parityAmount, uint256 diceChoice, bool parityChoice)",
   "event WinningsCredited(address indexed user, uint256 indexed roundId, uint256 amount)",
   "function owner() view returns (address)",
-  "function voltCredits(address) view returns (uint256)",
+  "function voltToken() view returns (address)",
   "function totalVaultDeposits() view returns (uint256)",
   "function totalEthContributed() view returns (uint256)",
-  "function charge() payable",
-  "function discharge(uint256 _amount)",
   "function placeBet(uint256 _diceNum, bool _isEven, uint256 _diceAmount, uint256 _parityAmount)",
   "function claim(uint256 _rid)",
   "function setBettingOpen(bool _isOpen)",
   "function requestRoundSettlement() returns (uint256)",
-  "function seedJackpot() payable",
+  "function seedJackpot(uint256 amount)",
   "function setMinBet(uint256 _newMin)",
   "function getCurrentRoundState() view returns (uint256 roundId, bool isBettingOpen, uint256 totalDicePool, uint256 totalParityPool, uint256 currentJackpot, uint256 minimumBet, uint256 startTime, uint256 closeTime)",
   "function getCurrentPoolStats() view returns (uint256[6] dicePoolAmounts, uint256[6] dicePoolBettors, uint256 evenPoolAmount, uint256 oddPoolAmount, uint256 evenPoolBettors, uint256 oddPoolBettors)",
@@ -21,6 +19,14 @@ export const VOLTSONIC_ABI = [
   "function getRoundSummary(uint256 _rid) view returns (uint256 totalDicePool, uint256 totalParityPool, uint256 totalJackpotWinners, uint256 diceResult, bool parityResult, bool settled, uint256 snapshotJackpot)",
   "function getClaimPreview(address _user, uint256 _rid) view returns (uint256 poolReward, uint256 jackpotReward, uint256 totalFee, uint256 netWinnings, bool claimable)",
   "function getRoundRandomnessState(uint256 _rid) view returns (bool randomnessRequested, bool randomnessFulfilled, uint256 randomnessRequestId)"
+];
+
+export const VOLT_ERC20_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)"
 ];
 
 export function formatEth(value) {

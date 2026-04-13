@@ -7,21 +7,25 @@ const VOLTSONIC_ABI = [
   "function jackpotBalance() view returns (uint256)",
   "function minBet() view returns (uint256)",
   "function bettingOpen() view returns (bool)",
+  "function voltToken() view returns (address)",
   "function totalVaultDeposits() view returns (uint256)",
   "function totalEthContributed() view returns (uint256)",
-  "function voltCredits(address) view returns (uint256)",
-  "function charge() payable",
-  "function discharge(uint256 _amount)",
   "function placeBet(uint256 _diceNum, bool _isEven, uint256 _diceAmount, uint256 _parityAmount)",
   "function claim(uint256 _rid)",
   "function setBettingOpen(bool _isOpen)",
   "function requestRoundSettlement() returns (uint256)",
-  "function seedJackpot() payable",
+  "function seedJackpot(uint256 amount)",
   "function setMinBet(uint256 _newMin)",
   "function getCurrentRoundState() view returns (uint256 roundId, bool isBettingOpen, uint256 totalDicePool, uint256 totalParityPool, uint256 currentJackpot, uint256 minimumBet, uint256 startTime, uint256 closeTime)",
   "function getUserBet(address _user, uint256 _rid) view returns (uint256 diceChoice, bool parityChoice, uint256 diceAmount, uint256 parityAmount, bool betOnDice, bool betOnParity, bool claimed)",
   "function getClaimPreview(address _user, uint256 _rid) view returns (uint256 poolReward, uint256 jackpotReward, uint256 totalFee, uint256 netWinnings, bool claimable)",
   "function getRoundSummary(uint256 _rid) view returns (uint256 totalDicePool, uint256 totalParityPool, uint256 totalJackpotWinners, uint256 diceResult, bool parityResult, bool settled, uint256 snapshotJackpot)"
+];
+
+const VOLT_ERC20_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)"
 ];
 
 function shortAddress(value) {
@@ -106,8 +110,10 @@ async function getRuntime({ requireSigner = false } = {}) {
 
   const runner = signer || provider;
   const contract = new ethers.Contract(address, VOLTSONIC_ABI, runner);
+  const tokenAddress = await contract.voltToken();
+  const tokenContract = new ethers.Contract(tokenAddress, VOLT_ERC20_ABI, runner);
 
-  return { provider, signer, contract, connectedAddress, contractAddress: address, network };
+  return { provider, signer, contract, tokenContract, tokenAddress, connectedAddress, contractAddress: address, network };
 }
 
 async function connectWallet() {
@@ -146,7 +152,7 @@ function setText(id, value) {
 
 function clearClaimPreview() {
   setText("claim-pool-reward", "0.0000 $VOLT");
-  setText("claim-jackpot-reward", "0.0000 ETH");
+  setText("claim-jackpot-reward", "0.0000 $VOLT");
   setText("claim-house-fee", "0.0000 $VOLT");
   setText("claim-net-winnings", "0.0000 $VOLT");
   setText("claim-round-label", "Latest settled round: --");
@@ -154,6 +160,7 @@ function clearClaimPreview() {
 
 window.VoltSonicApp = {
   VOLTSONIC_ABI,
+  VOLT_ERC20_ABI,
   shortAddress,
   formatEth,
   formatVolt,

@@ -1,9 +1,3 @@
-# VoltSonic
-
-VoltSonic is a Foundry-based Base Sepolia game contract with a lightweight frontend and backend.
-
-## About VoltSonic
-
 VoltSonic is a blockchain gaming project built around fast, round-based play on Base.
 
 Right now, the live game experience is focused on the dice game. Players use the `$VOLT` token to place bets on the outcome of a dice roll during an active round.

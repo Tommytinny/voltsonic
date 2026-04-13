@@ -2,6 +2,37 @@
 
 VoltSonic is a Foundry-based Base Sepolia game contract with a lightweight frontend and backend.
 
+## About VoltSonic
+
+VoltSonic is a blockchain gaming project built around fast, round-based play on Base.
+
+Right now, the live game experience is focused on the dice game. Players use the `$VOLT` token to place bets on the outcome of a dice roll during an active round.
+
+VoltSonic is being designed as a multi-game platform, so the dice game is just the beginning. More games are planned and will be added over time.
+
+The jackpot system is also part of the broader vision for VoltSonic, but it is still a coming-soon feature and should be treated as not fully live yet.
+
+## Mainnet Readiness
+
+VoltSonic can be deployed to Base mainnet, but this repo should be treated as testnet-first until the checklist below is complete.
+
+Mainnet blockers to resolve first:
+
+1. Upgrade safety: the recent token recovery issue showed that every upgrade needs an explicit migration plan and upgrade regression test.
+2. Proxy implementation safety: the project uses custom upgradeable utility contracts instead of the OpenZeppelin audited implementations, so the upgrade path deserves an extra review before production funds are involved.
+3. Operational safety: Base mainnet deployment requires the mainnet token address, VRF coordinator, key hash, subscription, automation setup, multisig ownership, and verified recovery procedures.
+4. Fund safety: this contract is custodial over the pooled token balance, so a full audit or at minimum an external review is strongly recommended before holding meaningful value.
+
+Recommended pre-mainnet checklist:
+
+1. Run fork tests against Base mainnet RPC for deploy, bet, settle, claim, and upgrade flows.
+2. Add an explicit upgrade-and-migrate script for any future storage or config changes.
+3. Move ownership from an EOA to a multisig before launch.
+4. Configure and fund Chainlink VRF and Automation on Base mainnet.
+5. Verify the implementation contract and record the proxy and implementation addresses.
+6. Dry-run deployment from fresh env files and confirm the frontend and backend both point to the proxy address.
+7. Rehearse incident response: pause betting, restore config, rotate owner, and recover from a failed upgrade.
+
 ## Foundry
 
 ### Build
@@ -44,6 +75,41 @@ forge script script/DeployVoltSonic.s.sol:DeployVoltSonic \
 ```
 
 If you want the deployer wallet and owner/admin wallet to be the same, omit `OWNER_ADDRESS`.
+
+## Deploy To Base Mainnet
+
+Use the same scripts, but switch all addresses and RPC values to Base mainnet values.
+
+Minimum values to update before a mainnet deployment:
+
+- `TOKEN_ADDRESS`
+- `BASE_MAINNET_RPC_URL`
+- `VRF_COORDINATOR`
+- `VRF_KEY_HASH`
+- `VRF_SUBSCRIPTION_ID`
+- `OWNER_ADDRESS`
+
+Example:
+
+```sh
+export PRIVATE_KEY=0x...
+export OWNER_ADDRESS=0xYourMultisig
+export TOKEN_ADDRESS=0xYourBaseMainnetVoltToken
+export BASE_MAINNET_RPC_URL=https://mainnet.base.org
+export VRF_COORDINATOR=0xYourBaseMainnetCoordinator
+export VRF_KEY_HASH=0xYourBaseMainnetKeyHash
+export VRF_SUBSCRIPTION_ID=123
+
+forge script script/DeployVoltSonic.s.sol:DeployVoltSonic \
+  --rpc-url "$BASE_MAINNET_RPC_URL" \
+  --broadcast
+```
+
+After deployment:
+
+1. Save the proxy address to `frontend/.env` and `backend/.env`.
+2. Verify the implementation on the explorer.
+3. Confirm `voltToken()`, `owner()`, `getCurrentRoundState()`, and VRF config on-chain before opening betting.
 
 ## Environment Files
 

@@ -28,3 +28,5 @@ docs/
 /backend/venv/
 /backend/env/
 /backend/.env
+
+/admin.html

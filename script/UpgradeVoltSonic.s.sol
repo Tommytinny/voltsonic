@@ -8,7 +8,6 @@ contract UpgradeVoltSonic is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address proxyAddress = vm.envAddress("VOLTSONIC_PROXY_ADDRESS");
-        address voltToken = vm.envAddress("TOKEN_ADDRESS");
 
         vm.startBroadcast(deployerPrivateKey);
 

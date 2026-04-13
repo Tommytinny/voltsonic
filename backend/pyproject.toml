@@ -10,7 +10,7 @@ dependencies = [
     "sqlalchemy>=2.0.36,<3.0.0",
     "greenlet>=3.1.1,<4.0.0",
     "asyncpg>=0.30.0,<1.0.0",
-    "psycopg2binary",
+    "psycopg2-binary",
     "alembic>=1.14.0,<2.0.0",
     "pydantic-settings>=2.6.0,<3.0.0",
     "web3>=7.6.0,<8.0.0",

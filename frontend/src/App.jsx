@@ -669,17 +669,28 @@ function useVoltSonic() {
   }
 
   useEffect(() => {
-    if (!window.ethereum || !CONTRACT_ADDRESS || !ethers.isAddress(CONTRACT_ADDRESS)) return;
+    if (!CONTRACT_ADDRESS || !ethers.isAddress(CONTRACT_ADDRESS)) return;
 
-    const nextProvider = new ethers.BrowserProvider(window.ethereum);
+    const nextProvider = BASE_SEPOLIA_RPC_URL
+      ? new ethers.JsonRpcProvider(BASE_SEPOLIA_RPC_URL)
+      : window.ethereum
+        ? new ethers.BrowserProvider(window.ethereum)
+        : null;
+
+    if (!nextProvider) return;
+
     const nextContract = new ethers.Contract(CONTRACT_ADDRESS, VOLTSONIC_ABI, nextProvider);
     setProvider(nextProvider);
     setContract(nextContract);
 
-    nextProvider.getNetwork().then((network) => setNetworkName(network.name));
-    nextProvider.send("eth_accounts", []).then((accounts) => {
-      if (accounts[0]) setAccount(accounts[0]);
-    });
+    nextProvider.getNetwork().then((network) => setNetworkName(network.name)).catch(() => {});
+
+    if (window.ethereum) {
+      const walletProvider = new ethers.BrowserProvider(window.ethereum);
+      walletProvider.send("eth_accounts", []).then((accounts) => {
+        if (accounts[0]) setAccount(accounts[0]);
+      }).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -956,12 +967,6 @@ function useVoltSonic() {
   }, [snapshot]);
 
   useEffect(() => {
-    if (!account) {
-      setBetHistory([]);
-      setBetHistoryLoading(false);
-      return;
-    }
-
     let cancelled = false;
 
     async function loadBetHistory() {
@@ -982,8 +987,8 @@ function useVoltSonic() {
         }
 
         const [openBets, closedBets] = await Promise.all([
-          fetchBackendJson(`/api/v1/bets/recent/open?user_address=${account}&limit=50`),
-          fetchBackendJson(`/api/v1/bets/recent/closed?user_address=${account}&limit=50`),
+          fetchBackendJson(`/api/v1/bets/recent/open${account ? `?user_address=${account}&limit=50` : "?limit=50"}`),
+          fetchBackendJson(`/api/v1/bets/recent/closed${account ? `?user_address=${account}&limit=50` : "?limit=50"}`),
         ]);
 
         const mergedBets = [...openBets, ...closedBets];
@@ -1229,10 +1234,9 @@ function useVoltSonic() {
     }
 
     try {
-      const nextProvider = provider || new ethers.BrowserProvider(window.ethereum);
+      const nextProvider = new ethers.BrowserProvider(window.ethereum);
       const accounts = await nextProvider.send("eth_requestAccounts", []);
       triggerInteractionLoading(accounts[0] || "");
-      setProvider(nextProvider);
       setAccount(accounts[0] || "");
       notify(
         accounts[0] ? `Connected ${shortAddress(accounts[0])}` : "Wallet connection cancelled.",
@@ -1251,14 +1255,13 @@ function useVoltSonic() {
     }
 
     try {
-      const nextProvider = provider || new ethers.BrowserProvider(window.ethereum);
+      const nextProvider = new ethers.BrowserProvider(window.ethereum);
       await window.ethereum.request({
         method: "wallet_requestPermissions",
         params: [{ eth_accounts: {} }],
       });
       const accounts = await nextProvider.send("eth_accounts", []);
       triggerInteractionLoading(accounts[0] || "");
-      setProvider(nextProvider);
       setAccount(accounts[0] || "");
       notify(
         accounts[0] ? `Switched to ${shortAddress(accounts[0])}` : "No wallet selected.",
@@ -1271,14 +1274,15 @@ function useVoltSonic() {
   }
 
   async function writeContract(runTx, pendingMessage, successMessage) {
-    if (!provider || !contract) {
+    if (!window.ethereum || !contract) {
       notify("Connect your wallet and try again.", "warning", "Wallet Required");
       return;
     }
 
     try {
       triggerInteractionLoading();
-      const signer = await provider.getSigner();
+      const walletProvider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await walletProvider.getSigner();
       const signedContract = contract.connect(signer);
       notify(pendingMessage, "info", "Transaction Submitted");
       const tx = await runTx(signedContract, signer);
@@ -2426,7 +2430,6 @@ function ClosedBetListItem({ bet }) {
 function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, walletConnected, roundCountdown, roundCountdownLabel }) {
   const openBets = betHistory.filter((bet) => bet.result === "open");
   const closedBets = betHistory.filter((bet) => bet.result !== "open");
-  const showConnectPrompt = !walletConnected && !betHistoryLoading;
 
   return (
     <>
@@ -2445,17 +2448,11 @@ function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, wa
             <div>
               <h2 className="font-headline text-base font-bold uppercase tracking-tight sm:text-xl">Bet Ledger</h2>
               <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-secondary sm:text-[10px] sm:tracking-[0.3em]">
-                Open bets and closed bets for the connected wallet
+                {walletConnected ? "Open bets and closed bets for the connected wallet" : "Live open bets and recent closed bets across VoltSonic"}
               </span>
             </div>
             <span className="font-mono text-[10px] uppercase text-outline">{betHistoryLoading ? "Loading..." : `${betHistory.length} total`}</span>
           </div>
-
-          {showConnectPrompt ? (
-            <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
-              Connect your wallet to list your open bets and closed bets.
-            </div>
-          ) : null}
 
           <div className="grid gap-6 xl:grid-cols-2">
             <section className="space-y-3">
@@ -2480,7 +2477,7 @@ function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, wa
                 openBets.map((bet) => <BetHistoryCard key={bet.id} bet={bet} />)
               ) : (
                 <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
-                  {walletConnected ? "No open bets yet." : "No open bets to show until a wallet is connected."}
+                  {walletConnected ? "No open bets yet." : "No live open bets yet."}
                 </div>
               )}
             </section>
@@ -2509,7 +2506,7 @@ function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, wa
                 </ul>
               ) : (
                 <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
-                  {walletConnected ? "No closed bets yet." : "No closed bets to show until a wallet is connected."}
+                  {walletConnected ? "No closed bets yet." : "No recent closed bets yet."}
                 </div>
               )}
             </section>

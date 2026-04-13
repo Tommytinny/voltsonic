@@ -147,3 +147,31 @@ This reads:
 - `VRF_CALLBACK_GAS_LIMIT`
 
 from the root `.env`.
+
+## Transfer Ownership On An Existing Proxy
+
+VoltSonic now uses a two-step ownership transfer flow.
+
+Step 1: the current owner starts the transfer:
+
+```sh
+forge script script/TransferOwnership.s.sol:TransferOwnership \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --broadcast
+```
+
+This reads:
+
+- `PRIVATE_KEY` as the current owner key
+- `VOLTSONIC_PROXY_ADDRESS`
+- `OWNER_ADDRESS` as the new pending owner
+
+Step 2: the pending owner accepts ownership:
+
+```sh
+forge script script/AcceptOwnership.s.sol:AcceptOwnership \
+  --rpc-url "$BASE_SEPOLIA_RPC_URL" \
+  --broadcast
+```
+
+For step 2, set `PRIVATE_KEY` to the pending owner key before running the script.

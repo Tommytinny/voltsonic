@@ -112,6 +112,18 @@ contract VoltSonicTokenRecovery is VoltSonic {
     }
 }
 
+contract BadUpgradeTarget {
+    function version() external pure returns (uint256) {
+        return 999;
+    }
+}
+
+contract WrongSlotUpgradeTarget is VoltSonic {
+    function proxiableUUID() external pure override returns (bytes32) {
+        return bytes32(uint256(123));
+    }
+}
+
 contract VoltSonicTest is Test {
     VoltSonic internal game;
     MockVRFCoordinatorV2 internal vrfCoordinator;
@@ -149,6 +161,7 @@ contract VoltSonicTest is Test {
 
     function testInitializeSetsDefaultValues() public view {
         assertEq(game.owner(), address(this));
+        assertEq(game.pendingOwner(), address(0));
         assertEq(game.houseFeePercent(), 2);
         assertEq(game.jackpotSeedPercent(), 20);
         assertEq(game.minBet(), 0.0004 ether);
@@ -158,6 +171,38 @@ contract VoltSonicTest is Test {
         assertEq(game.currentRid(), 0);
         assertEq(game.jackpotBalance(), 0);
         assertEq(address(game.voltToken()), address(voltToken));
+    }
+
+    function testOwnerCanTransferOwnershipInTwoSteps() public {
+        game.transferOwnership(alice);
+
+        assertEq(game.owner(), address(this));
+        assertEq(game.pendingOwner(), alice);
+
+        vm.prank(alice);
+        game.acceptOwnership();
+
+        assertEq(game.owner(), alice);
+        assertEq(game.pendingOwner(), address(0));
+    }
+
+    function testNonOwnerCannotStartOwnershipTransfer() public {
+        vm.prank(alice);
+        vm.expectRevert("Ownable: caller is not the owner");
+        game.transferOwnership(bob);
+    }
+
+    function testOnlyPendingOwnerCanAcceptOwnership() public {
+        game.transferOwnership(alice);
+
+        vm.prank(bob);
+        vm.expectRevert("Ownable: caller is not the pending owner");
+        game.acceptOwnership();
+    }
+
+    function testCannotTransferOwnershipToZeroAddress() public {
+        vm.expectRevert("Ownable: zero owner");
+        game.transferOwnership(address(0));
     }
 
     function testOwnerCanRestoreTokenAddressAfterUpgrade() public {
@@ -176,6 +221,20 @@ contract VoltSonicTest is Test {
         vm.prank(alice);
         vm.expectRevert("Ownable: caller is not the owner");
         game.setVoltToken(address(voltToken));
+    }
+
+    function testUpgradeRejectsNonUUPSImplementation() public {
+        BadUpgradeTarget badTarget = new BadUpgradeTarget();
+
+        vm.expectRevert("UUPSUpgradeable: unsupported proxiableUUID");
+        game.upgradeTo(address(badTarget));
+    }
+
+    function testUpgradeRejectsWrongStorageSlotImplementation() public {
+        WrongSlotUpgradeTarget wrongSlot = new WrongSlotUpgradeTarget();
+
+        vm.expectRevert("UUPSUpgradeable: unsupported storage slot");
+        game.upgradeTo(address(wrongSlot));
     }
 
     function testMintAndApprovalHelperFundsPlayerWallet() public {

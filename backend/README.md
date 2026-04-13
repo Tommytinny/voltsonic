@@ -48,6 +48,12 @@ pip install -e .
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+For Render or other hosted environments, use a production start command that binds to all interfaces and the platform port:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
 6. Open docs:
 
 `http://127.0.0.1:8000/docs`
@@ -82,6 +88,13 @@ curl -X POST "http://127.0.0.1:8000/api/v1/sync?from_block=39806939&max_blocks=2
 - `VOLTSONIC_CONTRACT_ADDRESS`
 - `INDEXER_START_BLOCK`
 - `INDEXER_BLOCK_CHUNK_SIZE`
+- `CORS_ORIGINS`
+
+If your frontend is hosted on Vercel, set `CORS_ORIGINS` to include your Vercel app URL, for example:
+
+```bash
+CORS_ORIGINS=["https://your-app.vercel.app"]
+```
 
 The default chunk size is `10` blocks to stay compatible with tight free-tier RPC log limits.
 

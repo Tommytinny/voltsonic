@@ -34,8 +34,10 @@ abstract contract Initializable {
 
 abstract contract OwnableUpgradeable is Initializable {
     address private _owner;
+    address private _pendingOwner;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         require(msg.sender == _owner, "Ownable: caller is not the owner");
@@ -50,6 +52,24 @@ abstract contract OwnableUpgradeable is Initializable {
 
     function owner() public view returns (address) {
         return _owner;
+    }
+
+    function pendingOwner() public view returns (address) {
+        return _pendingOwner;
+    }
+
+    function transferOwnership(address newOwner) public onlyOwner {
+        require(newOwner != address(0), "Ownable: zero owner");
+        _pendingOwner = newOwner;
+        emit OwnershipTransferStarted(_owner, newOwner);
+    }
+
+    function acceptOwnership() public {
+        require(msg.sender == _pendingOwner, "Ownable: caller is not the pending owner");
+        address previousOwner = _owner;
+        _owner = _pendingOwner;
+        _pendingOwner = address(0);
+        emit OwnershipTransferred(previousOwner, _owner);
     }
 }
 
@@ -91,6 +111,7 @@ abstract contract UUPSUpgradeable is Initializable {
 
     function _upgradeToAndCall(address newImplementation, bytes memory data, bool executeCall) internal {
         require(newImplementation.code.length > 0, "UUPSUpgradeable: new implementation is not a contract");
+        _checkProxiableUUID(newImplementation);
         _setImplementation(newImplementation);
         emit Upgraded(newImplementation);
 
@@ -102,6 +123,15 @@ abstract contract UUPSUpgradeable is Initializable {
                 }
             }
         }
+    }
+
+    function _checkProxiableUUID(address newImplementation) private view {
+        (bool success, bytes memory returndata) =
+            newImplementation.staticcall(abi.encodeWithSignature("proxiableUUID()"));
+        require(success && returndata.length == 32, "UUPSUpgradeable: unsupported proxiableUUID");
+
+        bytes32 slot = abi.decode(returndata, (bytes32));
+        require(slot == _IMPLEMENTATION_SLOT, "UUPSUpgradeable: unsupported storage slot");
     }
 
     function _getImplementation() internal view returns (address implementation) {

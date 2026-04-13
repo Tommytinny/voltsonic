@@ -747,6 +747,12 @@ function useVoltSonic() {
   }, [backendStatus]);
 
   useEffect(() => {
+    if (!account) {
+      setBetHistory([]);
+      setBetHistoryLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     async function checkBackend() {
@@ -987,8 +993,8 @@ function useVoltSonic() {
         }
 
         const [openBets, closedBets] = await Promise.all([
-          fetchBackendJson(`/api/v1/bets/recent/open${account ? `?user_address=${account}&limit=50` : "?limit=50"}`),
-          fetchBackendJson(`/api/v1/bets/recent/closed${account ? `?user_address=${account}&limit=50` : "?limit=50"}`),
+          fetchBackendJson(`/api/v1/bets/recent/open?user_address=${account}&limit=50`),
+          fetchBackendJson(`/api/v1/bets/recent/closed?user_address=${account}&limit=50`),
         ]);
 
         const mergedBets = [...openBets, ...closedBets];
@@ -2269,7 +2275,7 @@ function WalletPage({ snapshot, snapshotLoading, approveVoltIfNeeded, writeContr
                   <>
                     <SummaryRow label="Available Wallet Credit" value={snapshot.credits} />
                     <SummaryRow label="VoltSonic Spend Limit" value={snapshot.tokenAllowance} topMargin />
-                    <SummaryRow label="VOLT Token" value={shortAddress(snapshot.tokenAddress)} topMargin />
+                    {/* <SummaryRow label="VOLT Token" value={shortAddress(snapshot.tokenAddress)} topMargin /> */}
                   </>
                 )}
               </div>
@@ -2430,6 +2436,7 @@ function ClosedBetListItem({ bet }) {
 function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, walletConnected, roundCountdown, roundCountdownLabel }) {
   const openBets = betHistory.filter((bet) => bet.result === "open");
   const closedBets = betHistory.filter((bet) => bet.result !== "open");
+  const showConnectPrompt = !walletConnected && !betHistoryLoading;
 
   return (
     <>
@@ -2448,11 +2455,17 @@ function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, wa
             <div>
               <h2 className="font-headline text-base font-bold uppercase tracking-tight sm:text-xl">Bet Ledger</h2>
               <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-secondary sm:text-[10px] sm:tracking-[0.3em]">
-                {walletConnected ? "Open bets and closed bets for the connected wallet" : "Live open bets and recent closed bets across VoltSonic"}
+                Open bets and closed bets for the connected wallet
               </span>
             </div>
             <span className="font-mono text-[10px] uppercase text-outline">{betHistoryLoading ? "Loading..." : `${betHistory.length} total`}</span>
           </div>
+
+          {showConnectPrompt ? (
+            <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
+              Connect your wallet to view your open bets and closed bets.
+            </div>
+          ) : null}
 
           <div className="grid gap-6 xl:grid-cols-2">
             <section className="space-y-3">
@@ -2463,7 +2476,7 @@ function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, wa
                 </span>
               </div>
               {betHistoryLoading ? (
-                Array.from({ length: 2 }, (_, index) => (
+                Array.from({ length: 1 }, (_, index) => (
                   <div key={`open-skeleton-${index}`} className="border border-outline-variant bg-surface-container-high p-5">
                     <SkeletonText width="w-28" className="h-5" />
                     <SkeletonText width="w-20" className="mt-2 h-3" />
@@ -2477,7 +2490,7 @@ function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, wa
                 openBets.map((bet) => <BetHistoryCard key={bet.id} bet={bet} />)
               ) : (
                 <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
-                  {walletConnected ? "No open bets yet." : "No live open bets yet."}
+                  {walletConnected ? "No open bets yet." : "No open bets to show until a wallet is connected."}
                 </div>
               )}
             </section>
@@ -2490,7 +2503,7 @@ function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, wa
                 </span>
               </div>
               {betHistoryLoading ? (
-                Array.from({ length: 2 }, (_, index) => (
+                Array.from({ length: 1 }, (_, index) => (
                   <div key={`closed-skeleton-${index}`} className="border border-outline-variant bg-surface-container-high p-5">
                     <SkeletonText width="w-28" className="h-5" />
                     <SkeletonText width="w-20" className="mt-2 h-3" />
@@ -2506,7 +2519,7 @@ function BetsPage({ snapshot, snapshotLoading, betHistory, betHistoryLoading, wa
                 </ul>
               ) : (
                 <div className="border border-outline-variant bg-surface-container-high p-5 text-sm text-outline">
-                  {walletConnected ? "No closed bets yet." : "No recent closed bets yet."}
+                  {walletConnected ? "No closed bets yet." : "No closed bets to show until a wallet is connected."}
                 </div>
               )}
             </section>

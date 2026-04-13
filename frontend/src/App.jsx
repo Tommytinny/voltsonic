@@ -265,7 +265,15 @@ function getReadableError(error) {
   }
 
   if (combinedMessage.includes("execution reverted")) {
-    return "Transaction reverted by the contract. Please review the input values and current round state.";
+    // Try to extract the actual contract error message
+    if (error.reason && typeof error.reason === "string" && error.reason.trim()) {
+      return `Contract Error: ${error.reason}`;
+    }
+    // Generic revert with require(false) usually means onlyOwner check failed
+    if (combinedMessage.includes("require(false)")) {
+      return "You must be the contract owner to perform this action. Please connect with the owner wallet.";
+    }
+    return "Transaction reverted by the contract. Please check: (1) You are the contract owner, (2) Address is valid, (3) Address is not zero address.";
   }
 
   if (combinedMessage.includes("insufficient funds")) {
@@ -587,6 +595,7 @@ function useVoltSonic() {
   const [adminForm, setAdminForm] = useState({
     jackpotSeed: "",
     minBet: "",
+    houseFeeRecipient: "",
   });
   const [betHistory, setBetHistory] = useState([]);
   const [snapshot, setSnapshot] = useState(() => createInitialSnapshot());
@@ -2609,6 +2618,44 @@ function AdminPage({ snapshot, adminForm, setAdminForm, roundFeed, approveVoltIf
               >
                 Close Betting
               </button>
+            </div>
+          </section>
+
+          <section className="border border-outline-variant bg-surface-container-high p-6">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-secondary">account_balance_wallet</span>
+              <h3 className="font-headline text-lg font-bold uppercase">Fee Recipient</h3>
+            </div>
+            <div className="mt-6 border border-outline-variant bg-surface-container-highest p-4">
+              <label className="mb-2 block font-mono text-[10px] uppercase text-outline">House Fee Recipient Address</label>
+              <p className="mb-4 text-sm text-outline">
+                Set where house fees from bet settlements are sent. If not set, fees default to the owner address.
+              </p>
+              <div className="flex gap-3 flex-col sm:flex-row">
+                <input
+                  value={adminForm.houseFeeRecipient}
+                  onChange={(event) => setAdminForm((current) => ({ ...current, houseFeeRecipient: event.target.value }))}
+                  className="flex-1 border border-outline-variant bg-surface-container-high px-4 py-3 text-sm text-on-surface focus:border-primary focus:ring-0"
+                  type="text"
+                  placeholder="0x..."
+                />
+                <button
+                  onClick={() =>
+                    writeContract(
+                      (contract) => {
+                        if (!ethers.isAddress(adminForm.houseFeeRecipient)) throw new Error("Invalid address format");
+                        if (adminForm.houseFeeRecipient === ethers.ZeroAddress) throw new Error("Address cannot be zero address");
+                        return contract.setHouseFeeRecipient(adminForm.houseFeeRecipient);
+                      },
+                      "Setting house fee recipient...",
+                      "House fee recipient updated."
+                    )
+                  }
+                  className="border border-outline-variant bg-surface-container-high px-6 py-3 text-xs font-bold uppercase transition-colors hover:border-primary hover:text-primary sm:min-w-max"
+                >
+                  Set Recipient
+                </button>
+              </div>
             </div>
           </section>
 

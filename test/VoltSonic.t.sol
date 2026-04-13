@@ -96,13 +96,19 @@ contract MockVRFCoordinatorV2 {
     function fulfillRandomWords(address consumer, uint256 requestId, uint256 randomWord) external {
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = randomWord;
-        VoltSonic(consumer).rawFulfillRandomWords(requestId, randomWords);
+        VoltSonic(payable(consumer)).rawFulfillRandomWords(requestId, randomWords);
     }
 }
 
 contract VoltSonicV2 is VoltSonic {
     function version() external pure returns (uint256) {
         return 2;
+    }
+}
+
+contract VoltSonicTokenRecovery is VoltSonic {
+    function version() external pure returns (uint256) {
+        return 3;
     }
 }
 
@@ -124,7 +130,7 @@ contract VoltSonicTest is Test {
                 address(implementation), abi.encodeCall(VoltSonic.initialize, (address(this), address(voltToken)))
             );
 
-        game = VoltSonic(address(proxy));
+        game = VoltSonic(payable(address(proxy)));
         vrfCoordinator = new MockVRFCoordinatorV2();
         game.configureRandomness(address(vrfCoordinator), bytes32(uint256(1)), 1, 3, 250000);
     }
@@ -137,7 +143,7 @@ contract VoltSonicTest is Test {
                 address(implementation), abi.encodeCall(VoltSonic.initialize, (customOwner, address(voltToken)))
             );
 
-        VoltSonic customOwnedGame = VoltSonic(address(proxy));
+        VoltSonic customOwnedGame = VoltSonic(payable(address(proxy)));
         assertEq(customOwnedGame.owner(), customOwner);
     }
 
@@ -152,6 +158,24 @@ contract VoltSonicTest is Test {
         assertEq(game.currentRid(), 0);
         assertEq(game.jackpotBalance(), 0);
         assertEq(address(game.voltToken()), address(voltToken));
+    }
+
+    function testOwnerCanRestoreTokenAddressAfterUpgrade() public {
+        VoltSonicTokenRecovery implementation = new VoltSonicTokenRecovery();
+        MockERC20 replacementToken = new MockERC20();
+        game.upgradeTo(address(implementation));
+
+        game.setVoltToken(address(replacementToken));
+        assertEq(address(game.voltToken()), address(replacementToken));
+
+        game.setVoltToken(address(voltToken));
+        assertEq(address(game.voltToken()), address(voltToken));
+    }
+
+    function testNonOwnerCannotRestoreTokenAddress() public {
+        vm.prank(alice);
+        vm.expectRevert("Ownable: caller is not the owner");
+        game.setVoltToken(address(voltToken));
     }
 
     function testMintAndApprovalHelperFundsPlayerWallet() public {
@@ -601,7 +625,7 @@ contract VoltSonicTest is Test {
         VoltSonicV2 implementationV2 = new VoltSonicV2();
         game.upgradeTo(address(implementationV2));
 
-        VoltSonicV2 upgraded = VoltSonicV2(address(game));
+        VoltSonicV2 upgraded = VoltSonicV2(payable(address(game)));
         assertEq(upgraded.version(), 2);
         assertEq(upgraded.owner(), address(this));
         assertEq(address(upgraded.voltToken()), address(voltToken));

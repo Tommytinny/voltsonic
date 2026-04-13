@@ -10,6 +10,7 @@ export const VOLTSONIC_ABI = [
   "function placeBet(uint256 _diceNum, bool _isEven, uint256 _diceAmount, uint256 _parityAmount)",
   "function claim(uint256 _rid)",
   "function setBettingOpen(bool _isOpen)",
+  "function setHouseFeeRecipient(address _recipient)",
   "function requestRoundSettlement() returns (uint256)",
   "function seedJackpot(uint256 amount)",
   "function setMinBet(uint256 _newMin)",

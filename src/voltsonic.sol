@@ -64,6 +64,7 @@ contract VoltSonic is
     uint256 public intermissionDuration;
     uint256 public totalEthContributed; // Legacy name; tracks total VOLT inflow into the contract.
     uint256 public totalHouseFeesCollected;
+    address public houseFeeRecipient;
     uint256 public lastRandomRequestId;
     address public vrfCoordinator;
     bytes32 public vrfKeyHash;
@@ -123,6 +124,8 @@ contract VoltSonic is
     event BettingStatusUpdated(bool isOpen);
     event RandomnessRequested(uint256 indexed roundId, uint256 indexed requestId);
     event RandomnessFulfilled(uint256 indexed roundId, uint256 indexed requestId, uint256 randomWord, uint256 finalDice);
+    event HouseFeeRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
+    event VoltTokenUpdated(address indexed previousToken, address indexed newToken);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -140,6 +143,7 @@ contract VoltSonic is
         houseFeePercent = 2;
         jackpotSeedPercent = 20;
         minBet = 0.0004 ether; // 0.0004 VOLT with 18 decimals
+        houseFeeRecipient = initialOwner;
         roundDuration = 3 minutes;
         intermissionDuration = 1 minutes;
         vrfRequestConfirmations = 3;
@@ -378,12 +382,13 @@ contract VoltSonic is
         
         uint256 netWinnings = reward - totalFee;
         uint256 ownerFee = totalFee - seedAmount;
+        address feeRecipient = houseFeeRecipient != address(0) ? houseFeeRecipient : owner();
 
         emit WinningsCredited(msg.sender, _rid, netWinnings);
 
         _pushVolt(msg.sender, netWinnings);
         if (ownerFee > 0) {
-            _pushVolt(owner(), ownerFee);
+            _pushVolt(feeRecipient, ownerFee);
         }
     }
 
@@ -577,6 +582,18 @@ contract VoltSonic is
     function setBettingOpen(bool _isOpen) external onlyOwner {
         bettingOpen = _isOpen;
         emit BettingStatusUpdated(_isOpen);
+    }
+    function setHouseFeeRecipient(address _recipient) external onlyOwner {
+        require(_recipient != address(0), "Recipient cannot be zero address");
+        address previousRecipient = houseFeeRecipient;
+        houseFeeRecipient = _recipient;
+        emit HouseFeeRecipientUpdated(previousRecipient, _recipient);
+    }
+    function setVoltToken(address _token) external onlyOwner {
+        require(_token != address(0), "Token required");
+        address previousToken = address(voltToken);
+        voltToken = IERC20Lite(_token);
+        emit VoltTokenUpdated(previousToken, _token);
     }
     function forceSettleEmptyRound(uint256 _rid) external onlyOwner {
         Round storage round = rounds[_rid];

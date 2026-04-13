@@ -7,7 +7,7 @@ import {VoltSonic} from "../src/voltsonic.sol";
 contract ConfigureRandomness is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address proxyAddress = vm.envAddress("VOLTSONIC_PROXY_ADDRESS");
+        address payable proxyAddress = payable(vm.envAddress("VOLTSONIC_PROXY_ADDRESS"));
         address vrfCoordinator = vm.envAddress("VRF_COORDINATOR");
         bytes32 vrfKeyHash = vm.envBytes32("VRF_KEY_HASH");
         uint256 vrfSubscriptionId = vm.envUint("VRF_SUBSCRIPTION_ID");

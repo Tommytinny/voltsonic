@@ -280,7 +280,7 @@ export default function Wallet() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={account ? switchWallet : connectWallet}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[15px] bg-primary text-[hsl(185_100%_50%)] text-xs font-bold tracking-wider"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[15px] bg-primary text-[hsl(230_25%_7%)] text-xs font-bold tracking-wider"
             >
               <ArrowDownLeft className="w-3.5 h-3.5" /> {account ? "SWITCH WALLET" : "CONNECT WALLET"}
             </motion.button>

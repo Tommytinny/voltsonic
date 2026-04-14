@@ -79,7 +79,7 @@ export function RoundResult({ diceResult, parityResult }) {
         </div>
         <div className="w-px h-10 bg-border" />
         <div className="text-center">
-          <motion.div
+          {/*<motion.div
             className="text-3xl mb-1"
             initial={{ opacity: 0 }}
             animate={{ opacity: rolling ? 0.3 : 1 }}
@@ -98,7 +98,7 @@ export function RoundResult({ diceResult, parityResult }) {
                 {parityResult.toUpperCase()}
               </motion.div>
             )}
-          </AnimatePresence>
+          </AnimatePresence>*/}
         </div>
       </div>
     </motion.div>

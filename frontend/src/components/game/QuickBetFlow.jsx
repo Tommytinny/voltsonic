@@ -158,11 +158,11 @@ export function QuickBetFlow({
                   >
                     <div className="text-2xl mb-1">{diceFaces[n - 1]}</div>
                     <div className="text-lg font-mono font-black text-foreground">{n}</div>
-                    <div className="text-[10px] font-mono text-muted-foreground mt-1">
+                   {/*} <div className="text-[10px] font-mono text-muted-foreground mt-1">
                       {mult > 0 ? `${mult}x` : "—"}
-                    </div>
-                    <div className="text-[9px] font-mono text-muted-foreground">
-                      {dicePools[n].toFixed(2)} VOLT
+                    </div>*/}
+                    <div className="text-[9px] font-mono text-muted-foreground mt-1">
+                      {Number(dicePools?.[n] || 0).toFixed(2)} VOLT
                     </div>
                   </motion.button>
                 );

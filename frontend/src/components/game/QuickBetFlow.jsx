@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, Fuel, Check, Lock } from "lucide-react";
 
 const STEPS = ["dice", "amount", "confirm"];
-const STEP_LABELS = ["Pick Number", "Set Amount", "Confirm"];
+const STEP_LABELS = ["Pick Dice", "Set Amount", "Confirm"];
 const QUICK_AMOUNTS = [0.05, 0.1, 0.25, 0.5, 1.0];
 const diceFaces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 
@@ -101,7 +101,7 @@ export function QuickBetFlow({
           <div key={s} className="flex items-center flex-1">
             <motion.div
               className={`h-1 rounded-full flex-1 transition-colors duration-300 ${
-                i <= stepIndex ? "bg-primary" : "bg-muted"
+                i <= stepIndex ? "bg-[hsl(185_100%_50%)]" : "bg-muted"
               }`}
               animate={i === stepIndex ? { opacity: [0.6, 1, 0.6] } : { opacity: 1 }}
               transition={i === stepIndex ? { repeat: Infinity, duration: 1.5 } : {}}
@@ -113,7 +113,7 @@ export function QuickBetFlow({
       {/* Step label */}
       <div className="flex items-center justify-between">
         <div className="text-[10px] font-mono text-muted-foreground tracking-widest">
-          STEP {stepIndex + 1}/4 — {STEP_LABELS[stepIndex]}
+          STEP {stepIndex + 1}/3 — {STEP_LABELS[stepIndex]}
         </div>
         {/* Selections summary chips */}
         <div className="flex items-center gap-1">

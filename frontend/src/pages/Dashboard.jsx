@@ -362,9 +362,9 @@ export default function Game() {
 
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" />
+          <Zap className="w-5 h-5 text-[hsl(185_100%_50%)]" />
           <span className="font-black text-lg tracking-tight text-foreground">
-            VOLT<span className="text-primary">SONIC</span>
+            VOLT<span className="text-[hsl(185_100%_50%)]">SONIC</span>
           </span>
         </div>
         <div className="flex items-center gap-2">

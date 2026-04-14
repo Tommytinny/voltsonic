@@ -1,0 +1,132 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+@config "../tailwind.config.js";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 230 25% 7%;
+    --foreground: 210 40% 96%;
+
+    --card: 230 25% 10%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 230 25% 10%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 185 100% 50%;
+    --primary-foreground: 230 25% 7%;
+
+    --secondary: 330 100% 60%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 230 20% 16%;
+    --muted-foreground: 220 15% 55%;
+
+    --accent: 185 100% 50%;
+    --accent-foreground: 230 25% 7%;
+
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 230 20% 18%;
+    --input: 230 20% 16%;
+    --ring: 185 100% 50%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --neon-cyan: 185 100% 50%;
+    --neon-pink: 330 100% 60%;
+    --neon-green: 155 100% 45%;
+    --neon-red: 350 90% 55%;
+    --midnight: 230 25% 7%;
+    --midnight-light: 230 25% 12%;
+    --midnight-lighter: 230 20% 18%;
+
+    --glow-cyan: 0 0 20px hsl(185 100% 50% / 0.4), 0 0 60px hsl(185 100% 50% / 0.15);
+    --glow-pink: 0 0 20px hsl(330 100% 60% / 0.4), 0 0 60px hsl(330 100% 60% / 0.15);
+    --glow-green: 0 0 20px hsl(155 100% 45% / 0.4), 0 0 60px hsl(155 100% 45% / 0.15);
+    --glow-red: 0 0 20px hsl(350 90% 55% / 0.4), 0 0 60px hsl(350 90% 55% / 0.15);
+
+    --font-display: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --sidebar-background: 230 25% 10%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 185 100% 50%;
+    --sidebar-primary-foreground: 230 25% 7%;
+    --sidebar-accent: 230 20% 16%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 230 20% 18%;
+    --sidebar-ring: 185 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-display);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .glow-cyan {
+    box-shadow: var(--glow-cyan);
+  }
+
+  .glow-pink {
+    box-shadow: var(--glow-pink);
+  }
+
+  .glow-green {
+    box-shadow: var(--glow-green);
+  }
+
+  .glow-red {
+    box-shadow: var(--glow-red);
+  }
+
+  .text-glow-cyan {
+    text-shadow: 0 0 10px hsl(185 100% 50% / 0.6), 0 0 30px hsl(185 100% 50% / 0.3);
+  }
+
+  .text-glow-pink {
+    text-shadow: 0 0 10px hsl(330 100% 60% / 0.6), 0 0 30px hsl(330 100% 60% / 0.3);
+  }
+
+  .text-glow-green {
+    text-shadow: 0 0 10px hsl(155 100% 45% / 0.6), 0 0 30px hsl(155 100% 45% / 0.3);
+  }
+
+  .text-glow-red {
+    text-shadow: 0 0 10px hsl(350 90% 55% / 0.6), 0 0 30px hsl(350 90% 55% / 0.3);
+  }
+
+  .scanline {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      hsl(185 100% 50% / 0.03) 2px,
+      hsl(185 100% 50% / 0.03) 4px
+    );
+  }
+}

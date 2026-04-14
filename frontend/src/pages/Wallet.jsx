@@ -228,9 +228,9 @@ export default function Wallet() {
     <div className="min-h-screen bg-background scanline">
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" />
+          <Zap className="w-5 h-5 ext-[hsl(185_100%_50%)]" />
           <span className="font-black text-lg tracking-tight text-foreground">
-            VOLT<span className="text-primary">SONIC</span>
+            VOLT<span className="text-[hsl(185_100%_50%)]">SONIC</span>
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -274,13 +274,13 @@ export default function Wallet() {
             <span className="text-4xl font-black font-mono text-foreground tabular-nums">
               {snapshotLoading ? "0.00000" : animatedBalance.toFixed(5)}
             </span>
-            <span className="text-sm font-bold text-primary">$VOLT</span>
+            <span className="text-sm font-bold text-[hsl(185_100%_50%)]">$VOLT</span>
           </div>
           <div className="flex gap-2">
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={account ? switchWallet : connectWallet}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[15px] bg-primary text-primary-foreground text-xs font-bold tracking-wider"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[15px] bg-primary text-[hsl(185_100%_50%)] text-xs font-bold tracking-wider"
             >
               <ArrowDownLeft className="w-3.5 h-3.5" /> {account ? "SWITCH WALLET" : "CONNECT WALLET"}
             </motion.button>
@@ -302,7 +302,7 @@ export default function Wallet() {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-primary" />
+              <Shield className="w-4 h-4 text-[hsl(185_100%_50%)]" />
               <span className="text-xs font-bold text-foreground tracking-wide">SPENDING LIMIT</span>
             </div>
             <motion.button
@@ -355,13 +355,13 @@ export default function Wallet() {
                     placeholder="Custom..."
                     value={customLimit}
                     onChange={(event) => setCustomLimit(event.target.value)}
-                    className="flex-1 bg-muted border border-border rounded-lg px-3 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 bg-muted border border-[hsl(230_20%_18%)] rounded-lg px-3 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     onClick={() => handleSetLimit(customLimit)}
                     disabled={!parseFloat(customLimit) || !snapshot.tokenAddress || updatingLimit}
-                    className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold disabled:opacity-30"
+                    className="px-3 py-1.5 rounded-[var(0.75rem)] bg-[hsl(185_100%_50%)] text-[hsl(230_25%_7%)] text-xs font-bold disabled:opacity-30"
                   >
                     {updatingLimit ? "WAIT..." : "SET"}
                   </motion.button>

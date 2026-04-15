@@ -1,7 +1,15 @@
+import random
+from typing import Callable, Any
+
 from web3 import Web3
+from web3.contract import Contract
 
 from app.config import get_settings
 
+
+# ==============================
+# ABI DEFINITIONS
+# ==============================
 
 VOLTSONIC_EVENT_ABI = [
     {
@@ -42,7 +50,10 @@ VOLTSONIC_EVENT_ABI = [
 
 VOLTSONIC_VIEW_ABI = [
     {
-        "inputs": [{"internalType": "address", "name": "_user", "type": "address"}, {"internalType": "uint256", "name": "_rid", "type": "uint256"}],
+        "inputs": [
+            {"internalType": "address", "name": "_user", "type": "address"},
+            {"internalType": "uint256", "name": "_rid", "type": "uint256"},
+        ],
         "name": "getUserBet",
         "outputs": [
             {"internalType": "uint256", "name": "diceChoice", "type": "uint256"},
@@ -101,16 +112,115 @@ VOLTSONIC_VIEW_ABI = [
 ]
 
 
-def get_web3() -> Web3:
-    settings = get_settings()
-    if not settings.voltsonic_rpc_url:
-        raise ValueError("Missing VOLTSONIC_RPC_URL in backend .env")
-    return Web3(Web3.HTTPProvider(settings.voltsonic_rpc_url))
+# ==============================
+# MULTI RPC MANAGER
+# ==============================
+
+class MultiRPCWeb3:
+    def __init__(self, rpc_urls: list[str]):
+        self.rpc_urls = rpc_urls
+        self.providers: list[Web3] = []
+
+        for url in rpc_urls:
+            w3 = Web3(Web3.HTTPProvider(url))
+            if self._is_alive(w3):
+                self.providers.append(w3)
+
+        if not self.providers:
+            raise RuntimeError("No working RPC providers available")
+
+    def _is_alive(self, w3: Web3) -> bool:
+        try:
+            _ = w3.eth.block_number
+            return True
+        except Exception:
+            return False
+
+    def _get_w3(self) -> Web3:
+        return random.choice(self.providers)
+
+    def call(self, fn: Callable[[Web3], Any], retries: int = 3) -> Any:
+        last_error = None
+
+        for _ in range(retries):
+            w3 = self._get_w3()
+            try:
+                return fn(w3)
+            except Exception as e:
+                last_error = e
+
+        raise last_error
 
 
-def get_voltsonic_contract(w3: Web3):
+# ==============================
+# FACTORIES
+# ==============================
+
+def get_multi_web3() -> MultiRPCWeb3:
     settings = get_settings()
+
+    if not settings.voltsonic_rpc_urls:
+        raise ValueError("Missing VOLTSONIC_RPC_URLS in .env")
+
+    rpc_urls = [url.strip() for url in settings.voltsonic_rpc_urls.split(",")]
+
+    return MultiRPCWeb3(rpc_urls)
+
+
+def get_voltsonic_contract(w3: Web3) -> Contract:
+    settings = get_settings()
+
     if not settings.voltsonic_contract_address:
-        raise ValueError("Missing VOLTSONIC_CONTRACT_ADDRESS in backend .env")
-    abi = VOLTSONIC_EVENT_ABI + VOLTSONIC_VIEW_ABI
-    return w3.eth.contract(address=Web3.to_checksum_address(settings.voltsonic_contract_address), abi=abi)
+        raise ValueError("Missing VOLTSONIC_CONTRACT_ADDRESS in .env")
+
+    return w3.eth.contract(
+        address=Web3.to_checksum_address(settings.voltsonic_contract_address),
+        abi=VOLTSONIC_EVENT_ABI + VOLTSONIC_VIEW_ABI,
+    )
+
+
+# ==============================
+# HIGH LEVEL HELPERS (USE THESE)
+# ==============================
+
+multi_w3 = get_multi_web3()
+
+
+def get_current_round_state():
+    def inner(w3: Web3):
+        contract = get_voltsonic_contract(w3)
+        return contract.functions.getCurrentRoundState().call()
+
+    return multi_w3.call(inner)
+
+
+def get_user_bet(user: str, round_id: int):
+    def inner(w3: Web3):
+        contract = get_voltsonic_contract(w3)
+        return contract.functions.getUserBet(user, round_id).call()
+
+    return multi_w3.call(inner)
+
+
+def get_round_summary(round_id: int):
+    def inner(w3: Web3):
+        contract = get_voltsonic_contract(w3)
+        return contract.functions.getRoundSummary(round_id).call()
+
+    return multi_w3.call(inner)
+
+
+def get_randomness_state(round_id: int):
+    def inner(w3: Web3):
+        contract = get_voltsonic_contract(w3)
+        return contract.functions.getRoundRandomnessState(round_id).call()
+
+    return multi_w3.call(inner)
+
+def get_web3():
+    """
+    Backward compatibility wrapper.
+    Returns a single Web3 instance from MultiRPC.
+    """
+    multi_w3 = get_multi_web3()
+    return multi_w3._get_w3()

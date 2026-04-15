@@ -48,6 +48,31 @@ function timeAgo(timestamp) {
   return `${Math.floor(mins / 1440)}d ago`;
 }
 
+function WinListSkeleton() {
+  return (
+    <div className="space-y-1.5 max-h-64 overflow-y-auto">
+      {Array.from({ length: 3 }, (_, index) => (
+        <div
+          key={`win-skeleton-${index}`}
+          className="flex items-center justify-between rounded-xl bg-muted p-3"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="h-5 w-5 rounded bg-muted-foreground/20 animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-3 w-20 rounded bg-muted-foreground/20 animate-pulse" />
+              <div className="h-2 w-24 rounded bg-muted-foreground/20 animate-pulse" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-14 rounded bg-muted-foreground/20 animate-pulse" />
+            <div className="h-7 w-16 rounded-lg bg-muted-foreground/20 animate-pulse" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Wallet() {
   const navigate = useNavigate();
   const {
@@ -67,7 +92,9 @@ export default function Wallet() {
   const [copied, setCopied] = useState(false);
   const [configuredLimit, setConfiguredLimit] = useState(0);
   const [updatingLimit, setUpdatingLimit] = useState(false);
+  const [winsLoading, setWinsLoading] = useState(false);
   const previousBackendStatusRef = useRef(backendStatus);
+  const hasLoadedWinsRef = useRef(false);
 
   useEffect(() => {
     if (previousBackendStatusRef.current !== backendStatus) {
@@ -93,7 +120,8 @@ export default function Wallet() {
 
   useEffect(() => {
     if (!account || backendStatus !== "ready") {
-      setWins([]);
+      hasLoadedWinsRef.current = false;
+      setWinsLoading(false);
       return;
     }
 
@@ -101,6 +129,7 @@ export default function Wallet() {
 
     async function loadWins() {
       try {
+        if (!cancelled) setWinsLoading(true);
         const closedBets = await fetchBackendJson(`/api/v1/bets/recent/closed?user_address=${account}&limit=50`);
         if (cancelled) return;
 
@@ -118,22 +147,27 @@ export default function Wallet() {
           .sort((a, b) => b.roundId - a.roundId);
 
         setWins(nextWins);
+        setWinsLoading(false);
       } catch {
         if (!cancelled) {
-          setWins([]);
+          setWinsLoading(false);
           toast.error("Could not load wallet winnings.");
         }
       }
     }
 
-    loadWins();
-    const intervalId = window.setInterval(loadWins, 15000);
+    const shouldLoad = !hasLoadedWinsRef.current;
+
+    if (shouldLoad) {
+      loadWins().finally(() => {
+        hasLoadedWinsRef.current = true;
+      });
+    }
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
     };
-  }, [account, backendStatus]);
+  }, [account, backendStatus, snapshot.latestSettledRound, snapshot.claimNet]);
 
   const balance = parseFormattedAmount(snapshot.credits);
   const spendingLimit = parseFormattedAmount(snapshot.tokenAllowance);
@@ -156,6 +190,7 @@ export default function Wallet() {
   const animatedClaimable = useAnimatedCounter(totalClaimable);
   const limitUsedPercent = effectiveConfiguredLimit > 0 ? Math.min((spentThisRound / effectiveConfiguredLimit) * 100, 100) : 0;
   const tokenExplorerUrl = snapshot.tokenAddress ? `${BASESCAN_TOKEN_URL}/${snapshot.tokenAddress}` : null;
+  const showWinsSkeleton = snapshotLoading || winsLoading;
 
   const handleClaim = (roundId, id) => {
     setClaimingId(id);
@@ -271,10 +306,16 @@ export default function Wallet() {
             </motion.button>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-black font-mono text-foreground tabular-nums">
-              {snapshotLoading ? "0.00000" : animatedBalance.toFixed(5)}
-            </span>
-            <span className="text-sm font-bold text-[hsl(185_100%_50%)]">$VOLT</span>
+            {snapshotLoading ? (
+              <div className="h-10 w-40 rounded bg-muted/60 animate-pulse" />
+            ) : (
+              <>
+                <span className="text-4xl font-black font-mono text-foreground tabular-nums">
+                  {animatedBalance.toFixed(5)}
+                </span>
+                <span className="text-sm font-bold text-[hsl(185_100%_50%)]">$VOLT</span>
+              </>
+            )}
           </div>
           <div className="flex gap-2">
             <motion.button
@@ -316,32 +357,44 @@ export default function Wallet() {
 
           <div className="space-y-1.5">
             <div className="flex justify-between text-[10px] font-mono">
-              <span className="text-muted-foreground">
-                {spendingLimit.toFixed(4)} remaining
-              </span>
+              {snapshotLoading ? (
+                <div className="h-3 w-24 rounded bg-muted/60 animate-pulse" />
+              ) : (
+                <span className="text-muted-foreground">
+                  {spendingLimit.toFixed(4)} remaining
+                </span>
+              )}
               
             </div>
             <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${limitUsedPercent}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className={`h-full rounded-full ${
-                  limitUsedPercent > 80
-                    ? "bg-destructive"
-                    : limitUsedPercent > 50
-                      ? "bg-[hsl(var(--neon-green))]"
-                      : "bg-primary"
-                }`}
-              />
+              {snapshotLoading ? (
+                <div className="h-full w-2/5 rounded-full bg-muted-foreground/20 animate-pulse" />
+              ) : (
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${limitUsedPercent}%` }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  className={`h-full rounded-full ${
+                    limitUsedPercent > 80
+                      ? "bg-destructive"
+                      : limitUsedPercent > 50
+                        ? "bg-[hsl(var(--neon-green))]"
+                        : "bg-primary"
+                  }`}
+                />
+              )}
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Live ERC-20 allowance remaining after your current open bets
-            </p>
+            {snapshotLoading ? (
+              <div className="h-3 w-56 rounded bg-muted/60 animate-pulse" />
+            ) : (
+              <p className="text-[10px] text-muted-foreground">
+                Live ERC-20 allowance remaining after your current open bets
+              </p>
+            )}
           </div>
 
           <AnimatePresence>
-            {showLimitEditor && (
+            {showLimitEditor && !snapshotLoading && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
@@ -382,14 +435,14 @@ export default function Wallet() {
               <Gift className="w-4 h-4 text-[hsl(var(--neon-green))]" />
               <span className="text-xs font-bold text-foreground tracking-wide">CLAIM WINNING</span>
             </div>
-            {totalClaimable > 0 ? (
+            {!showWinsSkeleton && totalClaimable > 0 ? (
               <span className="text-xs font-mono font-bold text-[hsl(var(--neon-green))]">
                 +{animatedClaimable.toFixed(5)} $VOLT
               </span>
             ) : null}
           </div>
 
-          {parseFormattedAmount(snapshot.claimNet) > 0 && latestClaimRoundId ? (
+          {!snapshotLoading && parseFormattedAmount(snapshot.claimNet) > 0 && latestClaimRoundId ? (
             <motion.button
               whileTap={{ scale: 0.95 }}
               whileHover={{ scale: 1.01 }}
@@ -400,10 +453,15 @@ export default function Wallet() {
             >
               {claimingId === "latest" ? "CLAIMING..." : `CLAIM LATEST - ${snapshot.claimNet}`}
             </motion.button>
+          ) : snapshotLoading ? (
+            <div className="h-10 rounded-xl bg-muted/60 animate-pulse" />
           ) : null}
 
-          <div className="space-y-1.5 max-h-64 overflow-y-auto">
-            {wins.length > 0 ? (
+          {showWinsSkeleton ? (
+            <WinListSkeleton />
+          ) : (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {wins.length > 0 ? (
               wins.map((win) => (
                 <motion.div
                   key={win.id}
@@ -444,12 +502,13 @@ export default function Wallet() {
                   </div>
                 </motion.div>
               ))
-            ) : (
-              <p className="text-center text-[10px] text-muted-foreground font-mono py-2">
-                {account ? "No winning yet." : "Connect your wallet to load wallet activity."}
-              </p>
-            )}
-          </div>
+              ) : (
+                <p className="text-center text-[10px] text-muted-foreground font-mono py-2">
+                  {account ? "No winning yet." : "Connect your wallet to load wallet activity."}
+                </p>
+              )}
+            </div>
+          )}
         </motion.div>
       </main>
     </div>

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     api_reload: bool = True
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/voltsonic"
     sync_database_url: str = ""
-    voltsonic_rpc_url: str = ""
+    voltsonic_rpc_urls: str = ""
     voltsonic_contract_address: str = ""
     indexer_start_block: int = 0
     indexer_block_chunk_size: int = 10

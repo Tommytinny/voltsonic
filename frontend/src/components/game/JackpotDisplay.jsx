@@ -2,8 +2,21 @@ import { motion } from "framer-motion";
 import { Trophy, Flame, Sparkles, Lock } from "lucide-react";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 
-export function JackpotDisplay({ jackpotPool, streak }) {
+export function JackpotDisplay({ jackpotPool, streak, loading = false }) {
   const animatedValue = useAnimatedCounter(jackpotPool);
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-secondary/30 bg-secondary/5 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="h-3 w-40 rounded bg-secondary/20 animate-pulse" />
+          <div className="h-6 w-16 rounded-full bg-secondary/15 animate-pulse" />
+        </div>
+        <div className="mx-auto h-9 w-40 rounded bg-secondary/20 animate-pulse" />
+        <div className="h-10 rounded-lg border border-dashed border-secondary/20 bg-secondary/10 animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <motion.div

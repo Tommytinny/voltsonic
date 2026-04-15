@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/v1/sync", tags=["sync"])
 @router.post("", response_model=SyncResponse)
 async def sync_now(
     from_block: int | None = Query(default=None, ge=0),
-    max_blocks: int | None = Query(default=200, ge=1, le=5000),
+    max_blocks: int | None = Query(default=50, ge=1, le=5000),
     session: AsyncSession = Depends(db_session),
 ) -> SyncResponse:
     try:

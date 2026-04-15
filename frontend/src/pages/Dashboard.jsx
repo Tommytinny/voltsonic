@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Wallet, Users } from "lucide-react";
+import { Zap, Wallet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useVoltSonic, shortAddress, parseTokenAmount } from "./Index.jsx";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { JackpotDisplay } from "@/components/game/JackpotDisplay";
 import { RoundResult } from "@/components/game/RoundResult";
-import { LiveBetFeed } from "@/components/game/LiveBetFeed";
+import { BetHistoryPanel } from "@/components/game/BetHistoryPanel";
 import { BigWinBanner } from "@/components/game/BigWinBanner";
 import { RoundHistoryPanel } from "@/components/game/RoundHistoryPanel";
 import { QuickBetFlow } from "@/components/game/QuickBetFlow";
@@ -41,7 +41,7 @@ function fetchBackendJson(path) {
   });
 }
 
-function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading) {
+/*function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading) {
   const dicePoolValues = Array.from({ length: 6 }, (_, index) =>
     parseFormattedAmount(snapshot.roundPoolCards[index]?.amount)
   );
@@ -61,14 +61,17 @@ function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLo
   } else if (snapshot.bettingOpen && roundCloseMs && now < roundCloseMs) {
     phase = "betting";
     phaseEndTime = roundCloseMs;
+  } else if (!snapshot.bettingOpen && roundCloseMs && now < roundCloseMs) {
+    phase = "locked";
+    phaseEndTime = roundCloseMs;
+  } else if (roundCloseMs && now < roundCloseMs + resolveWindowMs) {
+    phase = "resolving";
+    phaseEndTime = roundCloseMs + resolveWindowMs;
   } else if (roundStartMs && now < roundStartMs) {
     phase = "starting";
     phaseEndTime = roundStartMs;
-  } else if (roundCloseMs && now < roundCloseMs + resolveWindowMs && roundCountdownLabel === "Settling") {
-    phase = "resolving";
-    phaseEndTime = roundCloseMs + resolveWindowMs;
-  } else if (roundStartMs) {
-    phase = "starting";
+  } else if (roundCloseMs && now >= roundCloseMs + resolveWindowMs) {
+    phase = "resolved";
     phaseEndTime = now + 10_000;
   }
 
@@ -85,28 +88,81 @@ function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLo
     parityResult: latestResult?.parityResult ?? null,
     jackpotPool: parseFormattedAmount(snapshot.jackpotBalance),
   };
-}
+}*/
 
-function mapBackendBetToFeedItem(bet, account) {
-  const diceAmount = parseRawTokenAmount(bet.dice_amount);
-  const parityAmount = parseRawTokenAmount(bet.parity_amount);
-  const totalAmount = diceAmount + parityAmount;
-  const pickParts = [];
+function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading) {
+  const dicePoolValues = Array.from({ length: 6 }, (_, index) =>
+    parseFormattedAmount(snapshot.roundPoolCards[index]?.amount)
+  );
 
-  if (bet.bet_on_dice && bet.dice_choice) {
-    pickParts.push(`D${bet.dice_choice}`);
+  const evenPool = parseFormattedAmount(snapshot.roundPoolCards[6]?.amount);
+  const oddPool = parseFormattedAmount(snapshot.roundPoolCards[7]?.amount);
+
+  const now = Date.now();
+  const roundStartMs = Number(snapshot.roundStartTime || 0) * 1000;
+  const roundCloseMs = Number(snapshot.roundCloseTime || 0) * 1000;
+
+  const resolveWindowMs = 3_000;
+
+  const roundId = parseRoundNumber(snapshot.currentRound);
+  const latestSettled = parseRoundNumber(snapshot.latestSettledRound);
+
+  const isNewRoundStarted = roundId !== latestSettled;
+
+  let phase = "loading";
+  let phaseEndTime = now + 10_000;
+
+  // -------------------------
+  // FIXED STATE MACHINE
+  // -------------------------
+
+  if (snapshotLoading) {
+    phase = "loading";
+    phaseEndTime = now + 10_000;
+  } 
+  else if (snapshot.bettingOpen) {
+    phase = "betting";
+    phaseEndTime = roundCloseMs || now + 20_000;
+  } 
+  else if (!snapshot.bettingOpen && !isNewRoundStarted) {
+    // betting closed but still same round → resolving
+    phase = "resolving";
+    phaseEndTime = (roundCloseMs || now) + resolveWindowMs;
+  } 
+  else if (isNewRoundStarted) {
+    // contract already moved forward → new round starting
+    phase = "starting";
+    phaseEndTime = roundStartMs || now + 10_000;
+  } 
+  else {
+    // fallback safe state (prevents UI freeze)
+    phase = "betting";
+    phaseEndTime = now + 20_000;
   }
-  if (bet.bet_on_parity) {
-    pickParts.push(bet.parity_choice ? "EVEN" : "ODD");
-  }
+
+  console.log({
+  currentRound: snapshot.currentRound,
+  latestSettledRound: snapshot.latestSettledRound,
+  bettingOpen: snapshot.bettingOpen,
+});
 
   return {
-    id: `${bet.id}-${bet.tx_hash}`,
-    player: account && bet.user_address?.toLowerCase() === account.toLowerCase() ? "You" : shortAddress(bet.user_address),
-    amount: totalAmount,
-    gameType: bet.bet_on_dice ? "dice" : "parity",
-    pick: pickParts.join(" + ") || "BET",
-    timestamp: Date.parse(bet.created_at || "") || 0,
+    roundId,
+
+    phase,
+    phaseEndTime,
+
+    dicePools: [0, ...dicePoolValues],
+    diceTotalPool: dicePoolValues.reduce((sum, value) => sum + value, 0),
+
+    evenPool,
+    oddPool,
+    parityTotalPool: evenPool + oddPool,
+
+    diceResult: latestResult?.diceResult ?? null,
+    parityResult: latestResult?.parityResult ?? null,
+
+    jackpotPool: parseFormattedAmount(snapshot.jackpotBalance),
   };
 }
 
@@ -120,44 +176,6 @@ function mapHistoryRound(round) {
   };
 }
 
-function mapBetHistoryToFeedItem(bet) {
-  const totalAmount = parseRawTokenAmount((BigInt(bet.diceAmount || 0n) + BigInt(bet.parityAmount || 0n)).toString());
-  const pickParts = [];
-
-  if (bet.betOnDice && bet.diceChoice) {
-    pickParts.push(`D${bet.diceChoice}`);
-  }
-  if (bet.betOnParity) {
-    pickParts.push(String(bet.parityChoice).toUpperCase());
-  }
-
-  return {
-    id: bet.id,
-    player: "You",
-    amount: totalAmount,
-    gameType: bet.betOnDice ? "dice" : "parity",
-    pick: pickParts.join(" + ") || "BET",
-    timestamp: Number(bet.timestamp || 0),
-  };
-}
-
-function mergeFeedItems(...groups) {
-  const merged = [];
-  const seenIds = new Set();
-
-  for (const group of groups) {
-    for (const item of group) {
-      if (!item || seenIds.has(item.id)) continue;
-      seenIds.add(item.id);
-      merged.push(item);
-    }
-  }
-
-  return merged
-    .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
-    .slice(0, 5);
-}
-
 function mapBetHistoryToRound(bet) {
   const totalStake = parseRawTokenAmount((BigInt(bet.diceAmount || 0n) + BigInt(bet.parityAmount || 0n)).toString());
   return {
@@ -169,12 +187,38 @@ function mapBetHistoryToRound(bet) {
   };
 }
 
+function DashboardHeroSkeleton() {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="rounded-2xl border border-border bg-card p-4 space-y-4"
+      style={{
+        boxShadow:
+          "0 0 40px hsl(var(--neon-cyan) / 0.04), 0 0 80px hsl(var(--neon-pink) / 0.02)",
+      }}
+    >
+      <div className="grid grid-cols-2 gap-3">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div key={`pool-skeleton-${index}`} className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
+            <div className="h-3 w-16 rounded bg-muted/60 animate-pulse" />
+            <div className="h-8 rounded bg-muted/60 animate-pulse" />
+            <div className="h-2 w-12 rounded bg-muted/60 animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="h-11 rounded-xl bg-muted/60 animate-pulse" />
+    </motion.div>
+  );
+}
+
 export default function Game() {
   const navigate = useNavigate();
   const {
     snapshot,
     snapshotLoading,
     betHistory,
+    betHistoryLoading,
     backendStatus,
     account,
     connectWallet,
@@ -182,9 +226,9 @@ export default function Game() {
     writeContract,
     roundCountdownLabel,
   } = useVoltSonic();
-  const [backendFeed, setBackendFeed] = useState([]);
   const [backendRounds, setBackendRounds] = useState([]);
   const previousBackendStatusRef = useRef(backendStatus);
+  const hasLoadedBackendDataRef = useRef(false);
 
   useEffect(() => {
     if (previousBackendStatusRef.current !== backendStatus) {
@@ -199,8 +243,7 @@ export default function Game() {
 
   useEffect(() => {
     if (backendStatus !== "ready") {
-      setBackendFeed([]);
-      setBackendRounds([]);
+      hasLoadedBackendDataRef.current = false;
       return;
     }
 
@@ -208,14 +251,10 @@ export default function Game() {
 
     async function loadBackendData() {
       try {
-        const [bets, rounds] = await Promise.all([
-          fetchBackendJson("/api/v1/bets/recent/open?limit=25"),
-          fetchBackendJson("/api/v1/rounds?limit=10"),
-        ]);
+        const rounds = await fetchBackendJson("/api/v1/rounds?limit=10");
 
         if (cancelled) return;
 
-        setBackendFeed(bets.map((bet) => mapBackendBetToFeedItem(bet, account)));
         setBackendRounds(
           rounds
             .filter((round) => round.settled && round.dice_result)
@@ -223,21 +262,24 @@ export default function Game() {
         );
       } catch {
         if (!cancelled) {
-          setBackendFeed([]);
           setBackendRounds([]);
           toast.error("Could not refresh live dashboard activity.");
         }
       }
     }
 
-    loadBackendData();
-    const intervalId = window.setInterval(loadBackendData, 3000);
+    const shouldLoad = !hasLoadedBackendDataRef.current;
+
+    if (shouldLoad) {
+      loadBackendData().finally(() => {
+        hasLoadedBackendDataRef.current = true;
+      });
+    }
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
     };
-  }, [account, backendStatus]);
+  }, [account, backendStatus, snapshot.currentRound, snapshot.latestSettledRound]);
 
   const latestResult = useMemo(() => {
     const diceResult = Number(snapshot.latestResultDice);
@@ -260,11 +302,6 @@ export default function Game() {
     [latestResult, roundCountdownLabel, snapshot, snapshotLoading]
   );
 
-  const playerCount = useMemo(
-    () => snapshot.roundPoolCards.reduce((sum, pool) => sum + Number(pool.bettors || 0), 0),
-    [snapshot.roundPoolCards]
-  );
-
   const getDiceMultiplier = (pick) => {
     const sidePool = round.dicePools[pick] || 0;
     if (sidePool <= 0) return 0;
@@ -280,18 +317,6 @@ export default function Game() {
     () => parseFormattedAmount(snapshot.tokenAllowance),
     [snapshot.tokenAllowance]
   );
-
-  const feed = useMemo(() => {
-    const localOpenBets = betHistory
-      .filter((bet) => bet.result === "open" || bet.status === "open")
-      .map(mapBetHistoryToFeedItem);
-
-    if (backendFeed.length > 0) {
-      return mergeFeedItems(localOpenBets, backendFeed);
-    }
-
-    return mergeFeedItems(localOpenBets);
-  }, [backendFeed, betHistory]);
 
   const roundHistory = useMemo(() => {
     if (backendRounds.length > 0) {
@@ -389,9 +414,13 @@ export default function Game() {
       <main className="max-w-lg mx-auto px-4 py-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[10px] font-mono text-muted-foreground tracking-widest">
-              ROUND #{round.roundId || "--"}
-            </div>
+            {snapshotLoading ? (
+              <div className="h-3 w-24 rounded bg-muted/60 animate-pulse" />
+            ) : (
+              <div className="text-[10px] font-mono text-muted-foreground tracking-widest">
+                ROUND #{round.roundId || "--"}
+              </div>
+            )}
             <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
               {/*<Users className="w-3 h-3" />
               <span>{playerCount} players</span>*/}
@@ -400,51 +429,56 @@ export default function Game() {
           <RoundTimer round={round} />
         </div>
 
-        <JackpotDisplay jackpotPool={round.jackpotPool} streak={0} />
+        <JackpotDisplay jackpotPool={round.jackpotPool} streak={0} loading={snapshotLoading} />
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-border bg-card p-4 space-y-4"
-          style={{
-            boxShadow:
-              "0 0 40px hsl(var(--neon-cyan) / 0.04), 0 0 80px hsl(var(--neon-pink) / 0.02)",
-          }}
-        >
-          <AnimatePresence mode="wait">
-            {showLatestResult ? (
-              <motion.div
-                key="result"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <RoundResult
-                  diceResult={latestResult.diceResult}
-                  parityResult={latestResult.parityResult}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="quickbet"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <QuickBetFlow
-                  dicePools={round.dicePools}
-                  diceTotalPool={round.diceTotalPool}
-                  getDiceMultiplier={getDiceMultiplier}
-                  onSubmit={handleQuickBet}
-                  disabled={!isBettingOpen || !account}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
+        {snapshotLoading ? (
+          <DashboardHeroSkeleton />
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-border bg-card p-4 space-y-4"
+            style={{
+              boxShadow:
+                "0 0 40px hsl(var(--neon-cyan) / 0.04), 0 0 80px hsl(var(--neon-pink) / 0.02)",
+            }}
+          >
+            <AnimatePresence mode="wait">
+              {showLatestResult ? (
+                <motion.div
+                  key="result"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <RoundResult
+                    roundId={latestResult.roundId}
+                    diceResult={latestResult.diceResult}
+                    parityResult={latestResult.parityResult}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="quickbet"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <QuickBetFlow
+                    dicePools={round.dicePools}
+                    diceTotalPool={round.diceTotalPool}
+                    getDiceMultiplier={getDiceMultiplier}
+                    onSubmit={handleQuickBet}
+                    disabled={!isBettingOpen || !account}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
 
         <AnimatePresence>
-          {!account ? (
+          {snapshotLoading ? null : !account ? (
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -474,8 +508,8 @@ export default function Game() {
           ) : null}
         </AnimatePresence>
 
-        <LiveBetFeed bets={feed} />
-        <RoundHistoryPanel history={roundHistory} />
+        <BetHistoryPanel bets={betHistory} loading={snapshotLoading || betHistoryLoading} connected={Boolean(account)} />
+        <RoundHistoryPanel history={roundHistory} loading={snapshotLoading && roundHistory.length === 0} />
 
         <div className="text-center text-[10px] text-muted-foreground font-mono tracking-wider space-y-0.5">
           <div>Dice pools are live now. Parity and jackpot rewards are coming soon.</div>

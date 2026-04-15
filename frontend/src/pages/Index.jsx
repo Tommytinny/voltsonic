@@ -2,13 +2,13 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
 import { VOLTSONIC_ABI, VOLT_ERC20_ABI, formatEth, formatVolt, getExplorerRoundCards } from "@/lib/contract";
+import { getPrimaryRpcUrl, hasRpcEndpoints, readContract, readContractsDistributed, runRpcRequest } from "@/lib/rpc";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { Zap, Wallet, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
 const CHAINLINK_ETH_USD_FEED = import.meta.env.VITE_CHAINLINK_ETH_USD_FEED_ADDRESS || "";
-const BASE_SEPOLIA_RPC_URL = import.meta.env.VITE_BASE_RPC_URL || "";
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
 const ROUND_DURATION_SECONDS = Number(import.meta.env.VITE_VOLTSONIC_ROUND_DURATION_SECONDS || 180);
 const VOLT_USD_PRICE = Number(import.meta.env.VITE_VOLT_USD_PRICE || 0);
@@ -354,6 +354,11 @@ function getReadableError(error) {
   return "Something went wrong.";
 }
 
+function formatDebugError(prefix, error) {
+  const detail = getReadableError(error);
+  return detail && detail !== "Something went wrong." ? `${prefix}: ${detail}` : prefix;
+}
+
 function formatOutcomeLabel(result) {
   if (result === "won_claimed") return "Won • Claimed";
   if (result === "won") return "Won";
@@ -556,10 +561,14 @@ function mapBackendBetToUiBet(bet, round = null) {
   const parityResult = round?.parity_result;
   return {
     id: `${bet.tx_hash}-${bet.round_id}`,
+    status: bet.status,
+    txHash: bet.tx_hash || "",
     roundId: Number(bet.round_id),
     result,
     claimed: Boolean(bet.claimed),
     settled: bet.status !== "open",
+    createdAt: bet.created_at || "",
+    updatedAt: bet.updated_at || "",
     diceChoice: bet.dice_choice ? Number(bet.dice_choice) : 0,
     parityChoice: bet.parity_choice === null ? "Odd" : bet.parity_choice ? "Even" : "Odd",
     diceAmount: BigInt(bet.dice_amount || "0"),
@@ -602,7 +611,6 @@ function createInitialSnapshot(selectedDice = 2, parityEven = true) {
 
 export function useVoltSonic() {
   const [account, setAccount] = useState("");
-  const [provider, setProvider] = useState(null);
   const [contract, setContract] = useState(null);
   const [networkName, setNetworkName] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -613,7 +621,7 @@ export function useVoltSonic() {
   const [roundCountdownLabel, setRoundCountdownLabel] = useState("Closes in");
   const [ethUsdPrice, setEthUsdPrice] = useState(null);
   const [ethUsdStatus, setEthUsdStatus] = useState(
-    !CHAINLINK_ETH_USD_FEED || !ethers.isAddress(CHAINLINK_ETH_USD_FEED) || !BASE_SEPOLIA_RPC_URL ? "missing_config" : "loading"
+    !CHAINLINK_ETH_USD_FEED || !ethers.isAddress(CHAINLINK_ETH_USD_FEED) || !hasRpcEndpoints() ? "missing_config" : "loading"
   );
   const [betForm, setBetForm] = useState({
     dice: 2,
@@ -630,6 +638,9 @@ export function useVoltSonic() {
   const [snapshot, setSnapshot] = useState(() => createInitialSnapshot());
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [betHistoryLoading, setBetHistoryLoading] = useState(false);
+  const [backendRefreshTick, setBackendRefreshTick] = useState(0);
+  const [snapshotRefreshTick, setSnapshotRefreshTick] = useState(0);
+  const [priceRefreshTick, setPriceRefreshTick] = useState(0);
 
   const roundFeed = useMemo(() => (
     snapshot.currentRound ? getExplorerRoundCards(snapshot.currentRound) : []
@@ -644,6 +655,7 @@ export function useVoltSonic() {
   const hasSeenInitialBackendStatusRef = useRef(false);
   const hasSeenInitialAccountRef = useRef(false);
   const resultModalTimeoutRef = useRef(null);
+  const tokenAddressRef = useRef("");
 
   function dismissToast(id) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
@@ -697,11 +709,23 @@ export function useVoltSonic() {
     }
   }
 
+  function refreshBackendStatus() {
+    setBackendRefreshTick((current) => current + 1);
+  }
+
+  function refreshSnapshot() {
+    setSnapshotRefreshTick((current) => current + 1);
+  }
+
+  function refreshPriceFeed() {
+    setPriceRefreshTick((current) => current + 1);
+  }
+
   useEffect(() => {
     if (!CONTRACT_ADDRESS || !ethers.isAddress(CONTRACT_ADDRESS)) return;
 
-    const nextProvider = BASE_SEPOLIA_RPC_URL
-      ? new ethers.JsonRpcProvider(BASE_SEPOLIA_RPC_URL)
+    const nextProvider = hasRpcEndpoints()
+      ? new ethers.JsonRpcProvider(getPrimaryRpcUrl())
       : window.ethereum
         ? new ethers.BrowserProvider(window.ethereum)
         : null;
@@ -709,10 +733,12 @@ export function useVoltSonic() {
     if (!nextProvider) return;
 
     const nextContract = new ethers.Contract(CONTRACT_ADDRESS, VOLTSONIC_ABI, nextProvider);
-    setProvider(nextProvider);
     setContract(nextContract);
 
-    nextProvider.getNetwork().then((network) => setNetworkName(network.name)).catch(() => {});
+    runRpcRequest((provider) => provider.getNetwork(), {
+      cacheKey: "rpc:network",
+      cacheTtlMs: 5 * 60 * 1000,
+    }).then((network) => setNetworkName(network.name)).catch(() => {});
 
     if (window.ethereum) {
       const walletProvider = new ethers.BrowserProvider(window.ethereum);
@@ -776,72 +802,201 @@ export function useVoltSonic() {
   }, [backendStatus]);
 
   useEffect(() => {
-    if (!account) {
-      setBetHistory([]);
-      setBetHistoryLoading(false);
-      return;
-    }
-
     let cancelled = false;
 
     async function checkBackend() {
       try {
         await fetchBackendJson("/health");
         if (!cancelled) setBackendStatus("ready");
-      } catch {
-        if (!cancelled) setBackendStatus("offline");
+      } catch (error) {
+        if (!cancelled) {
+          setBackendStatus("offline");
+          notify(
+            formatDebugError("Backend health check failed", error),
+            "warning",
+            "Backend Error",
+            "backend-health-check-failed"
+          );
+        }
       }
     }
 
     checkBackend();
-    const intervalId = window.setInterval(checkBackend, 15000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
     };
-  }, []);
+  }, [backendRefreshTick]);
 
   useEffect(() => {
-    if (!contract || !provider) return;
+    if (!account) {
+      setBetHistory([]);
+      setBetHistoryLoading(false);
+    }
+  }, [account]);
+
+  useEffect(() => {
+    if (!CONTRACT_ADDRESS || !ethers.isAddress(CONTRACT_ADDRESS) || !hasRpcEndpoints()) return;
 
     let cancelled = false;
 
     async function load() {
       try {
-        const [currentState, currentPoolStats, totalVaultDeposits, totalEthContributed, owner, tokenAddress] = await Promise.all([
-          contract.getCurrentRoundState(),
-          contract.getCurrentPoolStats(),
-          contract.totalVaultDeposits(),
-          contract.totalEthContributed(),
-          contract.owner(),
-          contract.voltToken(),
-        ]);
+        let currentState = { roundId: 0, isBettingOpen: false, totalDicePool: 0n, totalParityPool: 0n, currentJackpot: 0n, minimumBet: 0n, startTime: 0, closeTime: 0 };
+        let currentPoolStats = { dicePoolAmounts: [0n, 0n, 0n, 0n, 0n, 0n], dicePoolBettors: [0, 0, 0, 0, 0, 0], evenPoolAmount: 0n, oddPoolAmount: 0n, evenPoolBettors: 0, oddPoolBettors: 0 };
+        let totalVaultDeposits = 0n;
+        let totalEthContributed = 0n;
+        let owner = ethers.ZeroAddress;
+        let tokenAddress = tokenAddressRef.current || ethers.ZeroAddress;
 
-        const tokenContract = new ethers.Contract(tokenAddress, VOLT_ERC20_ABI, provider);
+        try {
+          const [
+            fetchedCurrentState,
+            fetchedCurrentPoolStats,
+            fetchedTotalVaultDeposits,
+            fetchedTotalEthContributed,
+            fetchedOwner,
+            fetchedTokenAddress,
+          ] = await readContractsDistributed([
+            {
+              address: CONTRACT_ADDRESS,
+              abi: VOLTSONIC_ABI,
+              method: "getCurrentRoundState",
+              cacheKey: "voltsonic:getCurrentRoundState",
+              cacheTtlMs: 3_000,
+            },
+            {
+              address: CONTRACT_ADDRESS,
+              abi: VOLTSONIC_ABI,
+              method: "getCurrentPoolStats",
+              cacheKey: "voltsonic:getCurrentPoolStats",
+              cacheTtlMs: 3_000,
+            },
+            {
+              address: CONTRACT_ADDRESS,
+              abi: VOLTSONIC_ABI,
+              method: "totalVaultDeposits",
+              cacheKey: "voltsonic:totalVaultDeposits",
+              cacheTtlMs: 8_000,
+            },
+            {
+              address: CONTRACT_ADDRESS,
+              abi: VOLTSONIC_ABI,
+              method: "totalEthContributed",
+              cacheKey: "voltsonic:totalEthContributed",
+              cacheTtlMs: 8_000,
+            },
+            {
+              address: CONTRACT_ADDRESS,
+              abi: VOLTSONIC_ABI,
+              method: "owner",
+              cacheKey: "voltsonic:owner",
+              cacheTtlMs: 5 * 60 * 1000,
+            },
+            {
+              address: CONTRACT_ADDRESS,
+              abi: VOLTSONIC_ABI,
+              method: "voltToken",
+              cacheKey: "voltsonic:voltToken",
+              cacheTtlMs: 5 * 60 * 1000,
+            },
+          ]);
+
+          currentState = fetchedCurrentState;
+          currentPoolStats = fetchedCurrentPoolStats;
+          totalVaultDeposits = fetchedTotalVaultDeposits;
+          totalEthContributed = fetchedTotalEthContributed;
+          owner = fetchedOwner;
+          tokenAddress = fetchedTokenAddress;
+          tokenAddressRef.current = tokenAddress;
+        } catch (error) {
+          console.error("Failed to load distributed contract snapshot:", error);
+          notify("Could not load contract snapshot from the RPC pool.", "error", "Contract Error", "distributed-snapshot-failed");
+        }
+
+        const hasTokenAddress = ethers.isAddress(tokenAddress) && tokenAddress !== ethers.ZeroAddress;
 
         const currentRoundNumber = Number(currentState.roundId);
         const latestSettledRoundId = currentRoundNumber > 0 ? currentRoundNumber - 1 : null;
-        const [connectedCredits, contractTokenBalance, tokenAllowance] = await Promise.all([
-          account ? tokenContract.balanceOf(account) : Promise.resolve(0n),
-          tokenContract.balanceOf(CONTRACT_ADDRESS),
-          account ? tokenContract.allowance(account, CONTRACT_ADDRESS) : Promise.resolve(0n),
-        ]);
+        let connectedCredits = 0n;
+        let contractTokenBalance = 0n;
+        let tokenAllowance = 0n;
+
+        if (account && hasTokenAddress) {
+          connectedCredits = await readContract({
+            address: tokenAddress,
+            abi: VOLT_ERC20_ABI,
+            method: "balanceOf",
+            args: [account],
+            cacheKey: `volt:${tokenAddress.toLowerCase()}:balanceOf:${account.toLowerCase()}`,
+            cacheTtlMs: 5_000,
+          }).catch(() => 0n);
+        }
+        if (hasTokenAddress) {
+          contractTokenBalance = await readContract({
+            address: tokenAddress,
+            abi: VOLT_ERC20_ABI,
+            method: "balanceOf",
+            args: [CONTRACT_ADDRESS],
+            cacheKey: `volt:${tokenAddress.toLowerCase()}:balanceOf:${CONTRACT_ADDRESS.toLowerCase()}`,
+            cacheTtlMs: 5_000,
+          }).catch(() => 0n);
+        }
+        if (account && hasTokenAddress) {
+          tokenAllowance = await readContract({
+            address: tokenAddress,
+            abi: VOLT_ERC20_ABI,
+            method: "allowance",
+            args: [account, CONTRACT_ADDRESS],
+            cacheKey: `volt:${tokenAddress.toLowerCase()}:allowance:${account.toLowerCase()}:${CONTRACT_ADDRESS.toLowerCase()}`,
+            cacheTtlMs: 5_000,
+          }).catch(() => 0n);
+        }
 
         let preview = [0n, 0n, 0n, 0n, false];
         let latestRoundSummary = null;
         if (account && latestSettledRoundId !== null) {
-          preview = await contract.getClaimPreview(account, latestSettledRoundId);
+          preview = await readContract({
+            address: CONTRACT_ADDRESS,
+            abi: VOLTSONIC_ABI,
+            method: "getClaimPreview",
+            args: [account, latestSettledRoundId],
+            cacheKey: `voltsonic:getClaimPreview:${account.toLowerCase()}:${latestSettledRoundId}`,
+            cacheTtlMs: 5_000,
+          }).catch(() => [0n, 0n, 0n, 0n, false]);
         }
         if (latestSettledRoundId !== null && backendStatus === "ready") {
           try {
             latestRoundSummary = await fetchBackendJson("/api/v1/rounds/latest/result");
-          } catch {
+          } catch (error) {
+            notify(
+              formatDebugError("Latest round backend fetch failed", error),
+              "warning",
+              "Backend Fallback",
+              "latest-round-backend-fetch-failed"
+            );
             latestRoundSummary = null;
           }
         }
         if (latestSettledRoundId !== null && !latestRoundSummary) {
-          latestRoundSummary = await contract.getRoundSummary(latestSettledRoundId);
+          try {
+            latestRoundSummary = await readContract({
+              address: CONTRACT_ADDRESS,
+              abi: VOLTSONIC_ABI,
+              method: "getRoundSummary",
+              args: [latestSettledRoundId],
+              cacheKey: `voltsonic:getRoundSummary:${latestSettledRoundId}`,
+              cacheTtlMs: 8_000,
+            });
+          } catch (error) {
+            console.error("Failed to get round summary:", error);
+            notify(
+              "Could not load latest round result from contract.",
+              "warning",
+              "Contract Read Error",
+              "round-summary-contract-failed"
+            );
+            latestRoundSummary = null;
+          }
         }
 
         if (cancelled) return;
@@ -906,19 +1061,41 @@ export function useVoltSonic() {
       } catch (error) {
         if (!cancelled) {
           setSnapshotLoading(false);
-          notify(getReadableError(error), "error", "Sync Error");
+          notify(
+            formatDebugError("Contract snapshot load failed", error),
+            "error",
+            "Sync Error",
+            "contract-snapshot-load-failed"
+          );
         }
       }
     }
 
     load();
-    const timer = window.setInterval(load, 12000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
-  }, [account, backendStatus, betForm.dice, betForm.parityEven, contract, provider]);
+  }, [account, backendStatus, snapshotRefreshTick]);
+
+  useEffect(() => {
+    if (!snapshot.roundStartTime && !snapshot.roundCloseTime) return;
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const nextMoments = [snapshot.roundStartTime, snapshot.roundCloseTime]
+      .map((value) => Number(value || 0))
+      .filter((value) => value > nowSeconds);
+    const timeoutMs = nextMoments.length
+      ? Math.max(1000, (Math.min(...nextMoments) - nowSeconds + 1) * 1000)
+      : 3000;
+    const timeoutId = window.setTimeout(() => {
+      refreshSnapshot();
+      if (backendStatus === "ready") {
+        refreshBackendStatus();
+      }
+    }, timeoutMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [backendStatus, snapshot.currentRound, snapshot.bettingOpen, snapshot.roundStartTime, snapshot.roundCloseTime]);
 
   useEffect(() => {
     const previous = prevSnapshotRef.current;
@@ -1005,9 +1182,8 @@ export function useVoltSonic() {
     let cancelled = false;
 
     async function loadBetHistory() {
-      if (backendStatus !== "ready") {
+      if (!account || backendStatus !== "ready") {
         if (!cancelled) {
-          setBetHistory([]);
           setBetHistoryLoading(false);
         }
         return;
@@ -1053,7 +1229,6 @@ export function useVoltSonic() {
         setBetHistoryLoading(false);
       } catch (error) {
         if (!cancelled) {
-          setBetHistory([]);
           setBetHistoryLoading(false);
           notify(getReadableError(error), "error", "History Error");
         }
@@ -1064,10 +1239,10 @@ export function useVoltSonic() {
     return () => {
       cancelled = true;
     };
-  }, [account, backendStatus, snapshot.currentRound, snapshot.bettingOpen, snapshot.latestSettledRound]);
+  }, [account, backendStatus, snapshot.currentRound, snapshot.latestSettledRound, snapshotRefreshTick]);
 
   useEffect(() => {
-    if (!BASE_SEPOLIA_RPC_URL || !CHAINLINK_ETH_USD_FEED || !ethers.isAddress(CHAINLINK_ETH_USD_FEED)) {
+    if (!hasRpcEndpoints() || !CHAINLINK_ETH_USD_FEED || !ethers.isAddress(CHAINLINK_ETH_USD_FEED)) {
       setEthUsdStatus("missing_config");
       return;
     }
@@ -1077,11 +1252,21 @@ export function useVoltSonic() {
     async function loadPrice() {
       try {
         if (!cancelled) setEthUsdStatus("loading");
-        const rpcProvider = new ethers.JsonRpcProvider(BASE_SEPOLIA_RPC_URL);
-        const priceFeed = new ethers.Contract(CHAINLINK_ETH_USD_FEED, CHAINLINK_FEED_ABI, rpcProvider);
         const [latestRoundData, decimals] = await Promise.all([
-          priceFeed.latestRoundData(),
-          priceFeed.decimals(),
+          readContract({
+            address: CHAINLINK_ETH_USD_FEED,
+            abi: CHAINLINK_FEED_ABI,
+            method: "latestRoundData",
+            cacheKey: `chainlink:${CHAINLINK_ETH_USD_FEED.toLowerCase()}:latestRoundData`,
+            cacheTtlMs: 15_000,
+          }),
+          readContract({
+            address: CHAINLINK_ETH_USD_FEED,
+            abi: CHAINLINK_FEED_ABI,
+            method: "decimals",
+            cacheKey: `chainlink:${CHAINLINK_ETH_USD_FEED.toLowerCase()}:decimals`,
+            cacheTtlMs: 60 * 60 * 1000,
+          }),
         ]);
 
         if (cancelled) return;
@@ -1106,13 +1291,10 @@ export function useVoltSonic() {
     }
 
     loadPrice();
-    const intervalId = window.setInterval(loadPrice, 30000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
     };
-  }, []);
+  }, [priceRefreshTick]);
 
   useEffect(() => {
     setSnapshot((current) => ({
@@ -1336,7 +1518,8 @@ export function useVoltSonic() {
         }
       }
       notify(successMessage, "success", "Transaction Confirmed");
-      window.location.reload();
+      refreshBackendStatus();
+      refreshSnapshot();
       return { ok: true, error: null };
     } catch (error) {
       const errorMessage = getReadableError(error);

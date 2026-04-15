@@ -46,7 +46,7 @@ export function RoundTimer({ round }) {
     locked: "LOCKED",
     starting: "GET READY",
     resolving: "RESOLVING",
-    resolved: "DONE",
+    resolved: "Waiting for next round",
   };
 
   return (

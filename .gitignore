@@ -18,6 +18,9 @@ docs/
 /frontend/dist/
 /frontend/.vite/
 /frontend/.cache/
+/frontend/src/pages/index1.jsx
+/frontend/src/pages/Game.jsx
+/frontend/src/pages/Wallet1.jsx
 
 # Backend Python cache and virtual environments
 /backend/__pycache__/

@@ -5,7 +5,57 @@ import { ChevronRight, ChevronLeft, Fuel, Check, Lock } from "lucide-react";
 const STEPS = ["dice", "amount", "confirm"];
 const STEP_LABELS = ["Pick Dice", "Set Amount", "Confirm"];
 const QUICK_AMOUNTS = [0.05, 0.1, 0.25, 0.5, 1.0];
-const diceFaces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+
+function DiceBadge({ value, className = "" }) {
+  const dotsByValue = {
+    1: [{ cx: 60, cy: 60, fill: "#22c55e" }],
+    2: [
+      { cx: 35, cy: 35, fill: "#ef4444" },
+      { cx: 85, cy: 85, fill: "#ef4444" },
+    ],
+    3: [
+      { cx: 30, cy: 30, fill: "#3b82f6" },
+      { cx: 60, cy: 60, fill: "#3b82f6" },
+      { cx: 90, cy: 90, fill: "#3b82f6" },
+    ],
+    4: [
+      { cx: 35, cy: 35, fill: "#f59e0b" },
+      { cx: 85, cy: 35, fill: "#f59e0b" },
+      { cx: 35, cy: 85, fill: "#f59e0b" },
+      { cx: 85, cy: 85, fill: "#f59e0b" },
+    ],
+    5: [
+      { cx: 30, cy: 30, fill: "#a855f7" },
+      { cx: 90, cy: 30, fill: "#a855f7" },
+      { cx: 60, cy: 60, fill: "#a855f7" },
+      { cx: 30, cy: 90, fill: "#a855f7" },
+      { cx: 90, cy: 90, fill: "#a855f7" },
+    ],
+    6: [
+      { cx: 35, cy: 25, fill: "#06b6d4" },
+      { cx: 35, cy: 60, fill: "#06b6d4" },
+      { cx: 35, cy: 95, fill: "#06b6d4" },
+      { cx: 85, cy: 25, fill: "#06b6d4" },
+      { cx: 85, cy: 60, fill: "#06b6d4" },
+      { cx: 85, cy: 95, fill: "#06b6d4" },
+    ],
+  };
+  const dots = dotsByValue[value] || dotsByValue[1];
+
+  return (
+    <svg
+      viewBox="0 0 120 120"
+      xmlns="http://www.w3.org/2000/svg"
+      className={`inline-block h-10 w-10 ${className}`.trim()}
+      aria-hidden="true"
+    >
+      <rect width="120" height="120" rx="20" fill="#f8fafc" />
+      {dots.map((dot, index) => (
+        <circle key={`${value}-${index}`} cx={dot.cx} cy={dot.cy} r="10" fill={dot.fill} />
+      ))}
+    </svg>
+  );
+}
 
 export function QuickBetFlow({
   dicePools,
@@ -121,9 +171,10 @@ export function QuickBetFlow({
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-primary/15 text-primary border border-primary/20"
+              className="inline-flex items-center gap-1 rounded border border-primary/20 bg-primary/15 px-1.5 py-0.5 text-[9px] font-mono font-bold text-primary"
             >
-              {diceFaces[dicePick - 1]} {dicePick}
+              <DiceBadge value={dicePick} className="h-5 w-5" />
+              {dicePick}
             </motion.span>
           )}
         </div>
@@ -156,7 +207,7 @@ export function QuickBetFlow({
                         : "border-border bg-card hover:border-primary/40 disabled:opacity-30 disabled:cursor-not-allowed"
                     }`}
                   >
-                    <div className="text-2xl mb-1">{diceFaces[n - 1]}</div>
+                    <DiceBadge value={n} className="mx-auto mb-1" />
                     <div className="text-lg font-mono font-black text-foreground">{n}</div>
                    {/*} <div className="text-[10px] font-mono text-muted-foreground mt-1">
                       {mult > 0 ? `${mult}x` : "—"}
@@ -264,7 +315,7 @@ export function QuickBetFlow({
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">{dicePick !== null ? diceFaces[dicePick - 1] : ""}</span>
+                  {dicePick !== null ? <DiceBadge value={dicePick} className="h-8 w-8" /> : null}
                   <div>
                     <div className="text-xs font-bold text-foreground">Dice #{dicePick}</div>
                     <div className="text-[10px] font-mono text-primary">{diceMult}x multiplier</div>

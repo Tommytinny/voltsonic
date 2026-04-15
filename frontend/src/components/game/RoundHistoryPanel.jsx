@@ -1,59 +1,62 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { History, Trophy } from "lucide-react";
 
-const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
+function DiceBadge({ value, className = "" }) {
+  const dotsByValue = {
+    1: [{ cx: 60, cy: 60, fill: "#22c55e" }],
+    2: [
+      { cx: 35, cy: 35, fill: "#ef4444" },
+      { cx: 85, cy: 85, fill: "#ef4444" },
+    ],
+    3: [
+      { cx: 30, cy: 30, fill: "#3b82f6" },
+      { cx: 60, cy: 60, fill: "#3b82f6" },
+      { cx: 90, cy: 90, fill: "#3b82f6" },
+    ],
+    4: [
+      { cx: 35, cy: 35, fill: "#f59e0b" },
+      { cx: 85, cy: 35, fill: "#f59e0b" },
+      { cx: 35, cy: 85, fill: "#f59e0b" },
+      { cx: 85, cy: 85, fill: "#f59e0b" },
+    ],
+    5: [
+      { cx: 30, cy: 30, fill: "#a855f7" },
+      { cx: 90, cy: 30, fill: "#a855f7" },
+      { cx: 60, cy: 60, fill: "#a855f7" },
+      { cx: 30, cy: 90, fill: "#a855f7" },
+      { cx: 90, cy: 90, fill: "#a855f7" },
+    ],
+    6: [
+      { cx: 35, cy: 25, fill: "#06b6d4" },
+      { cx: 35, cy: 60, fill: "#06b6d4" },
+      { cx: 35, cy: 95, fill: "#06b6d4" },
+      { cx: 85, cy: 25, fill: "#06b6d4" },
+      { cx: 85, cy: 60, fill: "#06b6d4" },
+      { cx: 85, cy: 95, fill: "#06b6d4" },
+    ],
+  };
+  const dots = dotsByValue[value] || dotsByValue[1];
 
-const diceFaces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+  return (
+    <svg
+      viewBox="0 0 120 120"
+      xmlns="http://www.w3.org/2000/svg"
+      className={`inline-block h-7 w-7 ${className}`.trim()}
+      aria-hidden="true"
+    >
+      <rect width="120" height="120" rx="20" fill="#f8fafc" />
+      {dots.map((dot, index) => (
+        <circle key={`${value}-${index}`} cx={dot.cx} cy={dot.cy} r="10" fill={dot.fill} />
+      ))}
+    </svg>
+  );
+}
 
-export function RoundHistoryPanel({ history }) {
-  const [fetchedHistory, setFetchedHistory] = useState([]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadRounds() {
-      try {
-        const response = await fetch(`${BACKEND_API_URL}/api/v1/rounds?limit=10`);
-        if (!response.ok) return;
-
-        const rounds = await response.json();
-        if (cancelled) return;
-
-        setFetchedHistory(
-          rounds
-            .filter((round) => round.settled && round.dice_result)
-            .map((round) => ({
-              roundId: Number(round.round_id),
-              diceResult: Number(round.dice_result || 0),
-              parityResult: round.parity_result ? "even" : "odd",
-              totalPool: (
-                Number(round.total_dice_pool || 0) / 1e18 +
-                Number(round.total_parity_pool || 0) / 1e18
-              ).toFixed(2),
-              jackpotWon: Number(round.total_jackpot_winners || 0) > 0,
-            }))
-        );
-      } catch {
-        if (!cancelled) {
-          setFetchedHistory([]);
-        }
-      }
-    }
-
-    loadRounds();
-    const intervalId = window.setInterval(loadRounds, 15000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, []);
-
+export function RoundHistoryPanel({ history, loading = false }) {
   const recent = useMemo(() => {
-    const source = fetchedHistory.length > 0 ? fetchedHistory : history;
-    return [...source].slice(0, 10);
-  }, [fetchedHistory, history]);
+    return [...(history || [])].slice(0, 10);
+  }, [history]);
 
   return (
     <div className="rounded-xl border border-border bg-card p-3 space-y-2">
@@ -66,7 +69,16 @@ export function RoundHistoryPanel({ history }) {
 
       <div className="overflow-x-auto">
         <div className="flex gap-1.5 min-w-max">
-          {recent.length > 0 ? recent.map((r, i) => (
+          {loading ? Array.from({ length: 6 }, (_, index) => (
+            <div
+              key={`history-skeleton-${index}`}
+              className="flex min-w-[52px] flex-col items-center gap-2 rounded-lg border border-border bg-muted/20 p-2"
+            >
+              <div className="h-2 w-8 rounded bg-muted/60 animate-pulse" />
+              <div className="h-5 w-5 rounded bg-muted/60 animate-pulse" />
+              <div className="h-2 w-4 rounded bg-muted/60 animate-pulse" />
+            </div>
+          )) : recent.length > 0 ? recent.map((r, i) => (
             <motion.div
               key={r.roundId}
               initial={{ opacity: 0, scale: 0.8 }}
@@ -84,7 +96,7 @@ export function RoundHistoryPanel({ history }) {
               <span className="text-[8px] font-mono text-muted-foreground">
                 #{r.roundId}
               </span>
-              <span className="text-sm">{diceFaces[r.diceResult - 1]}</span>
+              <DiceBadge value={r.diceResult} />
               <span className="text-[8px] font-mono text-muted-foreground">{r.diceResult}</span>
               {/*<span
                 className={`text-[9px] font-mono font-bold ${

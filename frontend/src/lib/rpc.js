@@ -1,14 +1,9 @@
 import { ethers } from "ethers";
 
-const BASE_RPC_URLS = [
-  "https://base-mainnet.infura.io/v3/2255b582b4074dc3a7e9a76575a87efa",
-  "https://base.drpc.org",
-  "https://base.api.pocket.network",
-  "https://base.lava.build",
-  "https://base-mainnet.public.blastapi.io",
-  "https://base.public.blockpi.network/v1/rpc/public",
-  
-];
+const BASE_RPC_URLS = String(import.meta.env.VITE_BASE_RPC_URLS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const DEFAULT_CHAIN_ID = Number(import.meta.env.VITE_BASE_CHAIN_ID || 8453);
 const MAX_CONCURRENT_REQUESTS = Math.max(1, Number(import.meta.env.VITE_RPC_MAX_CONCURRENT || 4));
 const MAX_RETRIES_PER_REQUEST = Math.max(0, Number(import.meta.env.VITE_RPC_MAX_RETRIES || 2));

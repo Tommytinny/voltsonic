@@ -12,6 +12,7 @@ import { BetHistoryPanel } from "@/components/game/BetHistoryPanel";
 import { BigWinBanner } from "@/components/game/BigWinBanner";
 import { RoundHistoryPanel } from "@/components/game/RoundHistoryPanel";
 import { QuickBetFlow } from "@/components/game/QuickBetFlow";
+import { HowToPlayPanel } from "@/components/game/HowToPlayPanel";
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
 
@@ -507,6 +508,8 @@ export default function Game() {
             </motion.p>
           ) : null}
         </AnimatePresence>
+
+        <HowToPlayPanel />
 
         <BetHistoryPanel bets={betHistory} loading={snapshotLoading || betHistoryLoading} connected={Boolean(account)} />
         <RoundHistoryPanel history={roundHistory} loading={snapshotLoading && roundHistory.length === 0} />

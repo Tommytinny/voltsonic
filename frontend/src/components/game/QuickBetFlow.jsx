@@ -171,7 +171,7 @@ export function QuickBetFlow({
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="inline-flex items-center gap-1 rounded border border-primary/20 bg-primary/15 px-1.5 py-0.5 text-[9px] font-mono font-bold text-primary"
+              className="inline-flex items-center gap-1 rounded border border-[hsl(185_100%_50%)] bg-[hsl(var(185_100%_50%)] px-1.5 py-0.5 text-[9px] font-mono font-bold text-[hsl(185_100%_50%)]"
             >
               <DiceBadge value={dicePick} className="h-5 w-5" />
               {dicePick}
@@ -258,7 +258,7 @@ export function QuickBetFlow({
                 placeholder="Custom amount"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full h-12 rounded-xl border border-border bg-muted px-4 pr-14 font-mono text-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                className="w-full h-12 rounded-xl border border-[hsl(230_20%_18%)] bg-[hsl(230_20%_16%)] px-4 pr-14 font-mono text-lg text-[hsl(210_40%_96%)] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
                 VOLT
@@ -369,7 +369,7 @@ export function QuickBetFlow({
               whileHover={{ scale: 1.02 }}
               onClick={goNext}
               disabled={!canProceed}
-              className="flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-bold bg-primary text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-1 px-4 py-2 rounded-[0.75rem] text-xs font-bold bg-[hsl(185_100%_50%)] text-[hsl(230_25%_7%)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               {step === "amount" ? "Review" : "Next"} <ChevronRight className="w-3.5 h-3.5" />
             </motion.button>

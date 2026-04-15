@@ -321,7 +321,7 @@ export default function Wallet() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={account ? switchWallet : connectWallet}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[15px] bg-primary text-[hsl(230_25%_7%)] text-xs font-bold tracking-wider"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[15px] bg-[hsl(185_100%_50%)] text-[hsl(230_25%_7%)] text-xs font-bold tracking-wider"
             >
               <ArrowDownLeft className="w-3.5 h-3.5" /> {account ? "SWITCH WALLET" : "CONNECT WALLET"}
             </motion.button>
@@ -379,7 +379,7 @@ export default function Wallet() {
                       ? "bg-destructive"
                       : limitUsedPercent > 50
                         ? "bg-[hsl(var(--neon-green))]"
-                        : "bg-primary"
+                        : "bg-[hsl(185_100%_50%)]"
                   }`}
                 />
               )}
@@ -408,7 +408,7 @@ export default function Wallet() {
                     placeholder="Custom..."
                     value={customLimit}
                     onChange={(event) => setCustomLimit(event.target.value)}
-                    className="flex-1 bg-muted border border-[hsl(230_20%_18%)] rounded-lg px-3 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 bg-[hsl(230_20%_16%)] border border-[hsl(230_20%_18%)] rounded-[0.75rem] px-3 py-1.5 text-xs font-mono text-[hsl(210_40%_96%)] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                   <motion.button
                     whileTap={{ scale: 0.95 }}

@@ -78,7 +78,6 @@ export function RoundResult({ roundId, diceResult, parityResult }) {
 
   if (diceResult === null || parityResult === null) return null;
 
-  console.log("Rendering RoundResult with:", { roundId, diceResult, parityResult });
 
   return (
     <motion.div
@@ -126,7 +125,7 @@ export function RoundResult({ roundId, diceResult, parityResult }) {
             )}
           </AnimatePresence>
         </div>
-        <div className="w-px h-10 bg-border" />
+        {/*<div className="w-px h-10 bg-border" />*/}
         <div className="text-center">
           {/*<motion.div
             className="text-3xl mb-1"

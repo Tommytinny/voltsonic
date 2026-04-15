@@ -78,6 +78,8 @@ export function RoundResult({ roundId, diceResult, parityResult }) {
 
   if (diceResult === null || parityResult === null) return null;
 
+  console.log("Rendering RoundResult with:", { roundId, diceResult, parityResult });
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.8 }}

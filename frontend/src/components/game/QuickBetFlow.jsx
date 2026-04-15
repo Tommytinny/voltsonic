@@ -232,7 +232,7 @@ export function QuickBetFlow({
             className="space-y-3"
           >
             {/* Quick amount buttons */}
-            <div className="flex gap-1.5 flex-wrap">
+            {/*<div className="flex gap-1.5 flex-wrap">
               {QUICK_AMOUNTS.map((a) => (
                 <motion.button
                   key={a}
@@ -247,7 +247,7 @@ export function QuickBetFlow({
                   {a} VOLT
                 </motion.button>
               ))}
-            </div>
+            </div>*/}
 
             {/* Custom input */}
             <div className="relative">

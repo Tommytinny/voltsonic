@@ -235,7 +235,7 @@ export default function Game() {
       if (backendStatus === "ready") {
         toast.success("Dashboard is synced with live data.");
       } else if (backendStatus === "offline") {
-        toast.warning("Backend is offline. Falling back where possible.");
+        toast.warning("Server is ofline. Falling back where possible.");
       }
       previousBackendStatusRef.current = backendStatus;
     }

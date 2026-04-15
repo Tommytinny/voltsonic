@@ -101,7 +101,7 @@ export default function Wallet() {
       if (backendStatus === "ready") {
         toast.success("Wallet data is live.");
       } else if (backendStatus === "offline") {
-        toast.warning("Backend is offline. Some wallet history may be unavailable.");
+        toast.warning("Server is ofline. Some wallet history may be unavailable.");
       }
       previousBackendStatusRef.current = backendStatus;
     }

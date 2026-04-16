@@ -276,6 +276,7 @@ export default function Wallet() {
 
   return (
     <div className="min-h-screen bg-background scanline">
+      <style>{`.text-primary { color: hsl(185 100% 50%) !important; }`}</style>
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap className="w-5 h-5 ext-[hsl(185_100%_50%)]" />
@@ -317,7 +318,7 @@ export default function Wallet() {
               className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md bg-muted"
             >
               <span>{account ? shortAddress(account) : "Connect wallet"}</span>
-              {account ? copied ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" /> : null}
+              {account ? copied ? <Check className="w-3 h-3 text-[hsl(185_100%_50%)]" /> : <Copy className="w-3 h-3" /> : null}
             </motion.button>
           </div>
           <div className="flex items-baseline gap-2">

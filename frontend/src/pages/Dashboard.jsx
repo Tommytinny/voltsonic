@@ -17,6 +17,8 @@ import { VOLTSONIC_ABI } from "@/lib/contract.js";
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
 const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
+const BASE_RPC_URL = import.meta.env.VITE_BASE_RPC_URL || "";
+const staticProvider = new ethers.JsonRpcProvider(BASE_RPC_URL);
 
 function parseRoundNumber(value) {
   return Number(String(value || "").replace("#", "")) || 0;
@@ -58,10 +60,10 @@ function postBackendJson(path, body) {
 }
 
 // Add this near your other utility functions (top of the file)
-async function fetchChainTruth(roundId, contractAddress, abi, provider) {
-  if (!roundId || !provider) return null;
+async function fetchChainTruth(roundId, contractAddress, abi) {
+  if (!roundId || !contractAddress) return null;
   try {
-    const contract = new ethers.Contract(contractAddress, abi, provider);
+    const contract = new ethers.Contract(contractAddress, abi, staticProvider);
     // [0] pools, [3] diceResult, [5] settled
     const summary = await contract.getRoundSummary(BigInt(roundId));
     return {
@@ -514,6 +516,14 @@ export default function Game() {
   const postedRoundIdRef = useRef(null);
   const [onChainData, setOnChainData] = useState(null);
 
+  const staticProvider = useMemo(() => {
+
+  // Use a reliable Public RPC for the background truth check
+
+  return new ethers.JsonRpcProvider(BASE_RPC_URL);
+
+}, []);
+
   
   useEffect(() => {
     if (previousBackendStatusRef.current !== backendStatus) {
@@ -640,8 +650,7 @@ const latestResult = useMemo(() => {
         const data = await fetchChainTruth(
             round.roundId, 
             CONTRACT_ADDRESS, 
-            VOLTSONIC_ABI, 
-            provider
+            VOLTSONIC_ABI
         );
         if (data && data.isSettled) {
           setOnChainData(data);
@@ -760,6 +769,16 @@ const latestResult = useMemo(() => {
       toast.warning("Bet rejected: amount is above your spending limit. Increase the limit in Wallet first.");
       return false;
     }
+
+    const minBetUsd = 5;
+    if (voltPrice > 0) {
+      const minBetVolt = minBetUsd / voltPrice;
+      if (amount < minBetVolt) {
+        toast.warning(`Minimum bet is $${minBetUsd} USD (≈ ${minBetVolt.toFixed(4)} VOLT).`);
+        return false;
+      }
+    }
+
     toast.info(`Submitting dice bet on ${dicePick}...`);
 
     const result = await writeContract(

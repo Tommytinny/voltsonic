@@ -119,6 +119,10 @@
   .text-glow-red {
     text-shadow: 0 0 10px hsl(350 90% 55% / 0.6), 0 0 30px hsl(350 90% 55% / 0.3);
   }
+
+  .text-primary {
+    color: hsl(185 100% 50%) !important;
+  }
 }
 
 .scanline {
@@ -130,3 +134,5 @@
       hsl(185 100% 50% / 0.03) 4px
     );
   }
+
+

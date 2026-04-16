@@ -16,7 +16,7 @@ const STEPS = [
   {
     icon: Dice3,
     title: "Place A Dice Bet",
-    body: "Return to the dashboard, pick one dice number, enter your VOLT amount, and confirm the bet before the round timer closes.",
+    body: "Return to the dashboard, pick one dice number, enter your VOLT amount (minimum $5 USD equivalent), and confirm the bet before the round timer closes.",
   },
   {
     icon: TimerReset,
@@ -49,12 +49,12 @@ export function HowToPlayPanel() {
         className="flex w-full items-center justify-between gap-3 p-4 text-left"
       >
         <div>
-          <div className="text-[10px] font-mono tracking-widest text-muted-foreground">
+          <div className="text-sm font-black uppercase tracking-widest text-foreground">
             HOW TO PLAY
           </div>
-          <h2 className="mt-1 text-sm font-black uppercase tracking-wide text-foreground">
+          {/*<h2 className="mt-1 text-sm font-black uppercase tracking-wide text-foreground">
             Wallet To Win Flow
-          </h2>
+          </h2>*/}
           <p className="mt-1 text-xs text-muted-foreground">
             Connect, approve, bet, wait for settlement, then claim in Wallet.
           </p>

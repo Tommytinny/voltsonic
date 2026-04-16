@@ -57,6 +57,8 @@ function DiceBadge({ value, className = "" }) {
   );
 }
 
+const MIN_BET_USD = 5;
+
 export function QuickBetFlow({
   dicePools,
   diceTotalPool,
@@ -73,15 +75,17 @@ export function QuickBetFlow({
 
   const stepIndex = STEPS.indexOf(step);
   const numAmount = parseFloat(amount) || 0;
+  const minBetVolt = voltPrice > 0 ? Number((MIN_BET_USD / voltPrice).toFixed(4)) : 0;
+  const isBelowMinimum = numAmount > 0 && minBetVolt > 0 && numAmount < minBetVolt;
 
   const diceMult = dicePick !== null ? getDiceMultiplier(dicePick) : 0;
   const potentialDiceReturn = numAmount * (diceMult || 0);
 
   const canProceed = useMemo(() => {
     if (step === "dice") return dicePick !== null;
-    if (step === "amount") return numAmount > 0;
+    if (step === "amount") return numAmount > 0 && !isBelowMinimum;
     return true;
-  }, [step, dicePick, numAmount]);
+  }, [step, dicePick, numAmount, isBelowMinimum]);
 
   const goNext = () => {
     const i = STEPS.indexOf(step);
@@ -277,6 +281,10 @@ export function QuickBetFlow({
                 ≈ ${(numAmount * voltPrice).toFixed(2)} USD
               </div>
             )}
+
+            <div className={`rounded-xl border p-3 text-xs ${isBelowMinimum ? "border-amber-400 bg-amber-400/10 text-amber-400" : "border-secondary/30 bg-secondary/5 text-muted-foreground"}`}>
+              Minimum bet: ${MIN_BET_USD} USD {voltPrice ? `≈ ${minBetVolt.toFixed(4)} VOLT` : "(price unavailable)"}
+            </div>
 
             {/* Return preview */}
             {numAmount > 0 && (

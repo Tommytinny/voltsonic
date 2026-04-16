@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import db_session
 from app.models import Round
-from app.schemas import RoundRead
+from app.schemas import RoundRead, RoundWrite
 
 
 router = APIRouter(prefix="/api/v1/rounds", tags=["rounds"])
@@ -36,4 +36,34 @@ async def get_round(round_id: int, session: AsyncSession = Depends(db_session)) 
     round_record = result.scalar_one_or_none()
     if round_record is None:
         raise HTTPException(status_code=404, detail="Round not found")
+    return round_record
+
+
+@router.post("", response_model=RoundRead)
+async def upsert_round(round_data: RoundWrite, session: AsyncSession = Depends(db_session)) -> RoundRead:
+    result = await session.execute(select(Round).where(Round.round_id == round_data.round_id))
+    round_record = result.scalar_one_or_none()
+
+    if round_record is None:
+        round_record = Round(round_id=round_data.round_id)
+        session.add(round_record)
+
+    round_record.settled = round_data.settled
+    if round_data.randomness_requested is not None:
+        round_record.randomness_requested = round_data.randomness_requested
+    if round_data.randomness_fulfilled is not None:
+        round_record.randomness_fulfilled = round_data.randomness_fulfilled
+    round_record.dice_result = round_data.dice_result
+    round_record.parity_result = round_data.parity_result
+    round_record.total_dice_pool = str(round_data.total_dice_pool)
+    round_record.total_parity_pool = str(round_data.total_parity_pool)
+    round_record.snapshot_jackpot = str(round_data.snapshot_jackpot)
+    round_record.total_jackpot_winners = round_data.total_jackpot_winners
+    round_record.started_at = round_data.started_at
+    round_record.closed_at = round_data.closed_at
+    round_record.settled_tx_hash = round_data.settled_tx_hash
+    round_record.settlement_block_number = round_data.settlement_block_number
+
+    await session.commit()
+    await session.refresh(round_record)
     return round_record

@@ -5,6 +5,23 @@ import { Lock, Timer } from "lucide-react";
 
 
 export function RoundTimer({ round }) {
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  useEffect(() => {
+    if (round.phase === "loading") {
+      setTimeLeft(0);
+      return undefined;
+    }
+    
+
+    const tick = () => setTimeLeft(Math.max(0, round.phaseEndTime - Date.now()));
+    tick();
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [round.phase, round.phaseEndTime]);
+
+  
+
   if (round.phase === "loading") {
     return (
       <div className="flex flex-col items-center gap-1.5">
@@ -14,17 +31,13 @@ export function RoundTimer({ round }) {
     );
   }
 
-  const [timeLeft, setTimeLeft] = useState(0);
-
-  useEffect(() => {
-    const tick = () => setTimeLeft(Math.max(0, round.phaseEndTime - Date.now()));
-    tick();
-    const id = setInterval(tick, 100);
-    return () => clearInterval(id);
-  }, [round.phaseEndTime]);
-
-  const phaseDuration =
-    round.phase === "betting" ? 20_000 : round.phase === "locked" ? 10_000 : round.phase === "starting" ? 10_000 : 3_000;
+  //const phaseDuration = round.phase === "betting" ? 20_000 : round.phase === "locked" ? 10_000 : round.phase === "starting" ? 10_000 : 3_000;
+  const phaseDuration = {
+  betting: (round.phaseEndTime - (round.phaseEndTime - 20000)), // Assuming 20s betting
+  locked: 10000,
+  starting: 50000,
+  resolving: 5000,
+  }[round.phase] || 10000;
   const progress = Math.min(1, timeLeft / phaseDuration);
   const seconds = Math.ceil(timeLeft / 1000);
   const isUrgent = round.phase === "betting" && seconds <= 5;

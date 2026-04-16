@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Trophy, Flame, Sparkles, Lock } from "lucide-react";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 
-export function JackpotDisplay({ jackpotPool, streak, loading = false }) {
+export function JackpotDisplay({ jackpotPool, streak, loading = false, voltPrice }) {
   const animatedValue = useAnimatedCounter(jackpotPool);
 
   if (loading) {
@@ -54,6 +54,11 @@ export function JackpotDisplay({ jackpotPool, streak, loading = false }) {
         </motion.span>
         <Sparkles className="w-4 h-4 text-secondary animate-pulse-neon" />
       </div>
+      {voltPrice && (
+        <div className="text-center text-xs text-muted-foreground font-mono">
+          ≈ ${(jackpotPool * voltPrice).toFixed(2)} USD
+        </div>
+      )}
       <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-secondary/30 bg-secondary/10 px-3 py-2">
         <Lock className="w-3.5 h-3.5 text-secondary" />
         <span className="text-[10px] text-center font-mono tracking-wide text-muted-foreground">

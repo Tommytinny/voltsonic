@@ -143,25 +143,30 @@ function convertVoltToUsdAmount(voltValue, voltUsdPrice) {
   return (volt * price).toFixed(2);
 }
 
-async function fetchDexScreenerTokenPriceUsd(chainId, tokenAddress) {
-  if (!chainId || !tokenAddress || !ethers.isAddress(tokenAddress)) {
+async function fetchDexScreenerTokenPriceUsd(tokenAddress) {
+  if (!tokenAddress || !ethers.isAddress(tokenAddress)) {
     return null;
   }
 
-  const response = await fetch(`https://api.dexscreener.com/tokens/v1/${chainId}/${tokenAddress}`);
+  tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS || tokenAddress;
+
+  const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`);
   if (!response.ok) {
+    console.error("Dexscreener price request failed:", { status: response.status, statusText: response.statusText });
     throw new Error(`Dexscreener price request failed: ${response.status}`);
+    
   }
 
-  const pairs = await response.json();
-  if (!Array.isArray(pairs) || pairs.length === 0) {
+  const data = await response.json();
+  if (!data || !data.pairs || !Array.isArray(data.pairs) || data.pairs.length === 0) {
     return null;
   }
 
-  const bestPair = [...pairs].sort((left, right) => {
-    const leftLiquidity = Number(left?.liquidity?.usd || 0);
-    const rightLiquidity = Number(right?.liquidity?.usd || 0);
-    return rightLiquidity - leftLiquidity;
+  // Find the pair with the highest liquidity
+  const bestPair = data.pairs.sort((a, b) => {
+    const aLiquidity = Number(a.liquidity?.usd || 0);
+    const bLiquidity = Number(b.liquidity?.usd || 0);
+    return bLiquidity - aLiquidity;
   })[0];
 
   const priceUsd = Number(bestPair?.priceUsd || 0);
@@ -623,6 +628,8 @@ export function useVoltSonic() {
   const [ethUsdStatus, setEthUsdStatus] = useState(
     !CHAINLINK_ETH_USD_FEED || !ethers.isAddress(CHAINLINK_ETH_USD_FEED) || !hasRpcEndpoints() ? "missing_config" : "loading"
   );
+  const [voltPrice, setVoltPrice] = useState(null);
+  const [voltPriceStatus, setVoltPriceStatus] = useState("loading");
   const [betForm, setBetForm] = useState({
     dice: 2,
     parityEven: true,
@@ -906,8 +913,16 @@ export function useVoltSonic() {
           totalVaultDeposits = fetchedTotalVaultDeposits;
           totalEthContributed = fetchedTotalEthContributed;
           owner = fetchedOwner;
+          const previousTokenAddress = tokenAddressRef.current;
           tokenAddress = fetchedTokenAddress;
           tokenAddressRef.current = tokenAddress;
+          if (
+            previousTokenAddress !== tokenAddress &&
+            ethers.isAddress(tokenAddress) &&
+            tokenAddress !== ethers.ZeroAddress
+          ) {
+            refreshPriceFeed();
+          }
         } catch (error) {
           console.error("Failed to load distributed contract snapshot:", error);
           notify("Could not load contract snapshot from the RPC pool.", "error", "Contract Error", "distributed-snapshot-failed");
@@ -1080,13 +1095,25 @@ export function useVoltSonic() {
   useEffect(() => {
     if (!snapshot.roundStartTime && !snapshot.roundCloseTime) return;
 
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    const nextMoments = [snapshot.roundStartTime, snapshot.roundCloseTime]
-      .map((value) => Number(value || 0))
-      .filter((value) => value > nowSeconds);
-    const timeoutMs = nextMoments.length
-      ? Math.max(1000, (Math.min(...nextMoments) - nowSeconds + 1) * 1000)
-      : 3000;
+    const nowMs = Date.now();
+    const roundStartMs = Number(snapshot.roundStartTime || 0) * 1000;
+    const roundCloseMs = Number(snapshot.roundCloseTime || 0) * 1000;
+
+    let timeoutMs = 3000;
+
+    // If we should already be inside the round window but the snapshot still says betting is closed,
+    // keep polling quickly so the dashboard can flip out of "Get ready" as soon as the next read lands.
+    if (!snapshot.bettingOpen && roundStartMs > 0 && roundCloseMs > nowMs && nowMs >= roundStartMs) {
+      timeoutMs = 1000;
+    } else {
+      const nextMoments = [roundStartMs, roundCloseMs]
+        .filter((value) => value > nowMs + 250);
+
+      if (nextMoments.length) {
+        timeoutMs = Math.max(1000, Math.min(...nextMoments) - nowMs + 250);
+      }
+    }
+
     const timeoutId = window.setTimeout(() => {
       refreshSnapshot();
       if (backendStatus === "ready") {
@@ -1291,6 +1318,37 @@ export function useVoltSonic() {
     }
 
     loadPrice();
+    return () => {
+      cancelled = true;
+    };
+  }, [priceRefreshTick]);
+
+  useEffect(() => {
+    const tokenAddress = tokenAddressRef.current || import.meta.env.VITE_TOKEN_ADDRESS || "";
+    if (!tokenAddress || !ethers.isAddress(tokenAddress)) {
+      setVoltPriceStatus("missing_config");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadVoltPrice() {
+      try {
+        if (!cancelled) setVoltPriceStatus("loading");
+        const price = await fetchDexScreenerTokenPriceUsd(tokenAddress);
+        //if (cancelled) return;
+        setVoltPrice(price);
+        setVoltPriceStatus("ready");
+      } catch (error) {
+        if (!cancelled) {
+          console.error("DexScreener VOLT/USD fetch failed", error);
+          setVoltPrice(null);
+          setVoltPriceStatus("error");
+        }
+      }
+    }
+
+    loadVoltPrice();
     return () => {
       cancelled = true;
     };
@@ -1568,6 +1626,8 @@ export function useVoltSonic() {
     roundCountdownLabel,
     ethUsdPrice,
     ethUsdStatus,
+    voltPrice,
+    voltPriceStatus,
     backendStatus,
     toasts,
     resultModal,
@@ -1575,6 +1635,7 @@ export function useVoltSonic() {
     dismissResultModal,
     connectWallet,
     switchWallet,
+    refreshSnapshot,
     approveVoltIfNeeded,
     writeContract,
   };

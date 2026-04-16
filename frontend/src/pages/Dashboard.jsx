@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Wallet } from "lucide-react";
@@ -13,8 +13,10 @@ import { BigWinBanner } from "@/components/game/BigWinBanner";
 import { RoundHistoryPanel } from "@/components/game/RoundHistoryPanel";
 import { QuickBetFlow } from "@/components/game/QuickBetFlow";
 import { HowToPlayPanel } from "@/components/game/HowToPlayPanel";
+import { VOLTSONIC_ABI } from "@/lib/contract.js";
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
+const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
 
 function parseRoundNumber(value) {
   return Number(String(value || "").replace("#", "")) || 0;
@@ -40,6 +42,38 @@ function fetchBackendJson(path) {
     }
     return response.json();
   });
+}
+
+function postBackendJson(path, body) {
+  return fetch(`${BACKEND_API_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(`Backend POST failed: ${response.status}`);
+    }
+    return response.json();
+  });
+}
+
+// Add this near your other utility functions (top of the file)
+async function fetchChainTruth(roundId, contractAddress, abi, provider) {
+  if (!roundId || !provider) return null;
+  try {
+    const contract = new ethers.Contract(contractAddress, abi, provider);
+    // [0] pools, [3] diceResult, [5] settled
+    const summary = await contract.getRoundSummary(BigInt(roundId));
+    return {
+      roundId: roundId,
+      diceResult: Number(summary[3]),
+      parityResult: summary[4] ? "even" : "odd",
+      isSettled: summary[5],
+    };
+  } catch (err) {
+    console.error("Direct chain fetch failed:", err);
+    return null;
+  }
 }
 
 /*function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading) {
@@ -91,7 +125,7 @@ function fetchBackendJson(path) {
   };
 }*/
 
-function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading) {
+/*function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading) {
   const dicePoolValues = Array.from({ length: 6 }, (_, index) =>
     parseFormattedAmount(snapshot.roundPoolCards[index]?.amount)
   );
@@ -109,43 +143,34 @@ function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLo
   const latestSettled = parseRoundNumber(snapshot.latestSettledRound);
 
   const isNewRoundStarted = roundId !== latestSettled;
+  const hasStarted = roundStartMs > 0 && now >= roundStartMs;
+  const beforeClose = roundCloseMs > 0 && now < roundCloseMs;
+  const insideBettingWindow = hasStarted && beforeClose;
 
   let phase = "loading";
   let phaseEndTime = now + 10_000;
-
-  // -------------------------
-  // FIXED STATE MACHINE
-  // -------------------------
 
   if (snapshotLoading) {
     phase = "loading";
     phaseEndTime = now + 10_000;
   } 
-  else if (snapshot.bettingOpen) {
+  else if (insideBettingWindow) {
     phase = "betting";
     phaseEndTime = roundCloseMs || now + 20_000;
   } 
-  else if (!snapshot.bettingOpen && !isNewRoundStarted) {
+  else if (!insideBettingWindow && !isNewRoundStarted && roundCloseMs > 0 && now >= roundCloseMs) {
     // betting closed but still same round → resolving
     phase = "resolving";
     phaseEndTime = (roundCloseMs || now) + resolveWindowMs;
   } 
-  else if (isNewRoundStarted) {
-    // contract already moved forward → new round starting
+  else if (roundStartMs > 0 && now < roundStartMs) {
     phase = "starting";
     phaseEndTime = roundStartMs || now + 10_000;
   } 
   else {
-    // fallback safe state (prevents UI freeze)
     phase = "betting";
     phaseEndTime = now + 20_000;
   }
-
-  console.log({
-  currentRound: snapshot.currentRound,
-  latestSettledRound: snapshot.latestSettledRound,
-  bettingOpen: snapshot.bettingOpen,
-});
 
   return {
     roundId,
@@ -163,6 +188,260 @@ function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLo
     diceResult: latestResult?.diceResult ?? null,
     parityResult: latestResult?.parityResult ?? null,
 
+    jackpotPool: parseFormattedAmount(snapshot.jackpotBalance),
+  };
+}*/
+
+/*function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading) {
+  // 1. Parse Pools
+  const dicePoolValues = Array.from({ length: 6 }, (_, index) =>
+    parseFormattedAmount(snapshot.roundPoolCards[index]?.amount)
+  );
+  const evenPool = parseFormattedAmount(snapshot.roundPoolCards[6]?.amount);
+  const oddPool = parseFormattedAmount(snapshot.roundPoolCards[7]?.amount);
+
+  // 2. Timestamps & Round IDs
+  const now = Date.now();
+  const roundId = parseRoundNumber(snapshot.currentRound);
+  const latestSettled = parseRoundNumber(snapshot.latestSettledRound);
+  const roundStartMs = Number(snapshot.roundStartTime || 0) * 1000;
+  const roundCloseMs = Number(snapshot.roundCloseTime || 0) * 1000;
+
+  // 3. Logic Flags
+  const isSettled = roundId <= latestSettled && roundId !== 0;
+  const resolveWindowMs = 5000; // Increased to 5s for blockchain propagation
+
+  let phase = "loading";
+  let phaseEndTime = now + 10000;
+
+  if (snapshotLoading || !roundId) {
+    phase = "loading";
+  } 
+  // CASE 1: Round is already settled on-chain
+  else if (isSettled) {
+    phase = "starting"; // Round is done, waiting for the bridge/backend to start #NEXT
+    phaseEndTime = roundStartMs > now ? roundStartMs : now + 5000;
+  } 
+  // CASE 2: Betting is active (Current Time is before Close Time)
+  else if (now < roundCloseMs) {
+    // Check if contract has bettingOpen flag (extra safety)
+    phase = snapshot.bettingOpen ? "betting" : "locked";
+    phaseEndTime = roundCloseMs;
+  } 
+  // CASE 3: Betting time expired, but not settled yet
+  else if (now >= roundCloseMs && now < roundCloseMs + resolveWindowMs) {
+    phase = "resolving";
+    phaseEndTime = roundCloseMs + resolveWindowMs;
+  } 
+  // CASE 4: The "Limbo" state (Resolution taking longer than expected)
+  else {
+    phase = "resolving"; // Keep showing resolving until snapshot.latestSettledRound updates
+    phaseEndTime = now + 2000; 
+  }
+
+  return {
+    roundId,
+    phase,
+    phaseEndTime,
+    dicePools: [0, ...dicePoolValues],
+    diceTotalPool: dicePoolValues.reduce((sum, value) => sum + value, 0),
+    evenPool, oddPool,
+    parityTotalPool: evenPool + oddPool,
+    diceResult: latestResult?.diceResult ?? null,
+    parityResult: latestResult?.parityResult ?? null,
+    jackpotPool: parseFormattedAmount(snapshot.jackpotBalance),
+  };
+}*/
+
+/*function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading) {
+  // 1. Parse Pools
+  const dicePoolValues = Array.from({ length: 6 }, (_, index) =>
+    parseFormattedAmount(snapshot.roundPoolCards?.[index]?.amount)
+  );
+  const evenPool = parseFormattedAmount(snapshot.roundPoolCards?.[6]?.amount);
+  const oddPool = parseFormattedAmount(snapshot.roundPoolCards?.[7]?.amount);
+
+  // 2. Timestamps & Round IDs
+  const now = Date.now();
+  const roundId = parseRoundNumber(snapshot.currentRound);
+  const latestSettled = parseRoundNumber(snapshot.latestSettledRound);
+  const roundStartMs = Number(snapshot.roundStartTime || 0) * 1000;
+  const roundCloseMs = Number(snapshot.roundCloseTime || 0) * 1000;
+
+  // 3. Logic Flags
+  // A round is officially "Done" only if the contract says it is settled.
+  const isSettled = roundId <= latestSettled && roundId !== 0;
+  
+  // A round is in "Limbo" if the time is up but the contract hasn't settled it yet.
+  const isWaitingForBlockchain = roundId > latestSettled && now >= roundCloseMs;
+
+  let phase = "loading";
+  let phaseEndTime = now + 10000;
+
+  if (snapshotLoading || !roundId) {
+    phase = "loading";
+  } 
+  // CASE 1: The "Gating" Logic - Stay in Resolving until the ID match happens
+  else if (isWaitingForBlockchain) {
+    phase = "resolving";
+    // Set an artificial end time for the progress bar to look active, 
+    // but the logic will re-trigger this block every tick until isSettled is true.
+    phaseEndTime = now + 5000; 
+  }
+  // CASE 2: Round is settled, moving to the next one
+  else if (isSettled) {
+    phase = "starting"; 
+    // If the next round start time is in the future, use it. Otherwise, 5s buffer.
+    phaseEndTime = roundStartMs > now ? roundStartMs : now + 5000;
+  } 
+  // CASE 3: Betting is active
+  else if (now < roundCloseMs) {
+    phase = snapshot.bettingOpen ? "betting" : "locked";
+    phaseEndTime = roundCloseMs;
+  } 
+  // DEFAULT: Fallback safety
+  else {
+    phase = "resolving";
+    phaseEndTime = now + 2000;
+  }
+
+  return {
+    roundId,
+    phase,
+    phaseEndTime,
+    dicePools: [0, ...dicePoolValues],
+    diceTotalPool: dicePoolValues.reduce((sum, value) => sum + value, 0),
+    evenPool, 
+    oddPool,
+    parityTotalPool: evenPool + oddPool,
+    diceResult: latestResult?.diceResult ?? null,
+    parityResult: latestResult?.parityResult ?? null,
+    jackpotPool: parseFormattedAmount(snapshot.jackpotBalance),
+    latestSettled, // Exported for debugging
+  };
+}*/
+
+
+/*function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading, onChainData) {
+  const dicePoolValues = Array.from({ length: 6 }, (_, index) =>
+    parseFormattedAmount(snapshot.roundPoolCards?.[index]?.amount)
+  );
+  const evenPool = parseFormattedAmount(snapshot.roundPoolCards?.[6]?.amount);
+  const oddPool = parseFormattedAmount(snapshot.roundPoolCards?.[7]?.amount);
+
+  const now = Date.now();
+  const roundId = parseRoundNumber(snapshot.currentRound);
+  const latestSettled = parseRoundNumber(snapshot.latestSettledRound);
+  const roundStartMs = Number(snapshot.roundStartTime || 0) * 1000;
+  const roundCloseMs = Number(snapshot.roundCloseTime || 0) * 1000;
+
+  // OVERRIDE: Trust the chain if the backend is slow
+  const isSettledOnChain = onChainData?.isSettled || false;
+  const isSettled = (roundId <= latestSettled && roundId !== 0) || isSettledOnChain;
+  
+  const isWaitingForBlockchain = roundId > latestSettled && !isSettledOnChain && now >= roundCloseMs;
+
+  let phase = "loading";
+  let phaseEndTime = now + 10000;
+
+  if (snapshotLoading || !roundId) {
+    phase = "loading";
+  } 
+  else if (isWaitingForBlockchain) {
+    phase = "resolving";
+    phaseEndTime = now + 5000; 
+  }
+  else if (isSettled) {
+    phase = "starting"; 
+    phaseEndTime = roundStartMs > now ? roundStartMs : now + 5000;
+  } 
+  else if (now < roundCloseMs) {
+    phase = snapshot.bettingOpen ? "betting" : "locked";
+    phaseEndTime = roundCloseMs;
+  } 
+  else {
+    phase = "resolving";
+    phaseEndTime = now + 2000;
+  }
+
+  return {
+    roundId,
+    phase,
+    phaseEndTime,
+    dicePools: [0, ...dicePoolValues],
+    diceTotalPool: dicePoolValues.reduce((sum, value) => sum + value, 0),
+    evenPool, 
+    oddPool,
+    parityTotalPool: evenPool + oddPool,
+    // Use onChainData result if backend hasn't updated yet
+    diceResult: isSettledOnChain ? onChainData.diceResult : (latestResult?.diceResult ?? null),
+    parityResult: isSettledOnChain ? (onChainData.diceResult % 2 === 0 ? "even" : "odd") : (latestResult?.parityResult ?? null),
+    jackpotPool: parseFormattedAmount(snapshot.jackpotBalance),
+  };
+}*/
+
+function buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading, onChainData) {
+  const dicePoolValues = Array.from({ length: 6 }, (_, index) =>
+    parseFormattedAmount(snapshot.roundPoolCards?.[index]?.amount)
+  );
+  
+  const now = Date.now();
+  const roundId = parseRoundNumber(snapshot.currentRound);
+  const latestSettled = parseRoundNumber(snapshot.latestSettledRound);
+  const roundStartMs = Number(snapshot.roundStartTime || 0) * 1000;
+  const roundCloseMs = Number(snapshot.roundCloseTime || 0) * 1000;
+
+  // LOGIC FLAGS
+  const isSettledOnChain = onChainData?.isSettled || false;
+  const isSettled = (roundId <= latestSettled && roundId !== 0) || isSettledOnChain;
+  const isWaitingForBlockchain = roundId > latestSettled && !isSettledOnChain && now >= roundCloseMs;
+
+  // --- TRACE LOGGING ---
+  /*console.group(`🎲 State Trace: Round #${roundId}`);
+  console.log("Current Time:", new Date(now).toLocaleTimeString());
+  console.log("Round Close:", new Date(roundCloseMs).toLocaleTimeString());
+  console.table({
+    "Backend Settled ID": latestSettled,
+    "Blockchain Settled?": isSettledOnChain,
+    "Is Settled (Total)?": isSettled,
+    "Is In Limbo?": isWaitingForBlockchain,
+    "Raw Dice Result": isSettledOnChain ? onChainData.diceResult : latestResult?.diceResult
+  });
+  console.groupEnd();*/
+
+  let phase = "loading";
+  let phaseEndTime = now + 10000;
+
+  if (snapshotLoading || !roundId) {
+    phase = "loading";
+  } 
+  else if (isWaitingForBlockchain) {
+    phase = "resolving";
+    phaseEndTime = now + 5000; 
+  }
+  else if (isSettled) {
+    phase = "starting"; 
+    phaseEndTime = roundStartMs > now ? roundStartMs : now + 5000;
+  } 
+  else if (now < roundCloseMs) {
+    phase = snapshot.bettingOpen ? "betting" : "locked";
+    phaseEndTime = roundCloseMs;
+  } 
+  else {
+    phase = "resolving";
+    phaseEndTime = now + 2000;
+  }
+
+  return {
+    roundId,
+    phase,
+    phaseEndTime,
+    dicePools: [0, ...dicePoolValues],
+    diceTotalPool: dicePoolValues.reduce((sum, v) => sum + v, 0),
+    evenPool: parseFormattedAmount(snapshot.roundPoolCards?.[6]?.amount), 
+    oddPool: parseFormattedAmount(snapshot.roundPoolCards?.[7]?.amount),
+    diceResult: isSettledOnChain ? onChainData.diceResult : (latestResult?.diceResult ?? null),
+    parityResult: isSettledOnChain ? (onChainData.diceResult % 2 === 0 ? "even" : "odd") : (latestResult?.parityResult ?? null),
     jackpotPool: parseFormattedAmount(snapshot.jackpotBalance),
   };
 }
@@ -225,12 +504,17 @@ export default function Game() {
     connectWallet,
     switchWallet,
     writeContract,
+    roundCountdown,
     roundCountdownLabel,
+    voltPrice,
   } = useVoltSonic();
   const [backendRounds, setBackendRounds] = useState([]);
   const previousBackendStatusRef = useRef(backendStatus);
   const hasLoadedBackendDataRef = useRef(false);
+  const postedRoundIdRef = useRef(null);
+  const [onChainData, setOnChainData] = useState(null);
 
+  
   useEffect(() => {
     if (previousBackendStatusRef.current !== backendStatus) {
       if (backendStatus === "ready") {
@@ -242,6 +526,25 @@ export default function Game() {
     }
   }, [backendStatus]);
 
+  const loadBackendData = useCallback(async () => {
+    if (backendStatus !== "ready") {
+      return;
+    }
+
+    try {
+      const rounds = await fetchBackendJson("/api/v1/rounds?limit=10");
+      setBackendRounds(
+        rounds
+          .filter((round) => round.settled && round.dice_result)
+          .map(mapHistoryRound)
+      );
+    } catch (error) {
+      console.warn("Failed to refresh live dashboard activity:", error);
+      setBackendRounds([]);
+      toast.error("Could not refresh live dashboard activity.");
+    }
+  }, [backendStatus]);
+
   useEffect(() => {
     if (backendStatus !== "ready") {
       hasLoadedBackendDataRef.current = false;
@@ -249,40 +552,25 @@ export default function Game() {
     }
 
     let cancelled = false;
+    let interval;
 
-    async function loadBackendData() {
-      try {
-        const rounds = await fetchBackendJson("/api/v1/rounds?limit=10");
-
-        if (cancelled) return;
-
-        setBackendRounds(
-          rounds
-            .filter((round) => round.settled && round.dice_result)
-            .map(mapHistoryRound)
-        );
-      } catch {
-        if (!cancelled) {
-          setBackendRounds([]);
-          toast.error("Could not refresh live dashboard activity.");
-        }
-      }
-    }
-
-    const shouldLoad = !hasLoadedBackendDataRef.current;
-
-    if (shouldLoad) {
-      loadBackendData().finally(() => {
+    loadBackendData().finally(() => {
+      if (!cancelled) {
         hasLoadedBackendDataRef.current = true;
-      });
-    }
+      }
+    });
+
+    interval = setInterval(() => {
+      if (!cancelled) loadBackendData();
+    }, 5000);
 
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
-  }, [account, backendStatus, snapshot.currentRound, snapshot.latestSettledRound]);
+  }, [backendStatus, snapshot.currentRound, snapshot.latestSettledRound, loadBackendData]);
 
-  const latestResult = useMemo(() => {
+  /*const latestResult = useMemo(() => {
     const diceResult = Number(snapshot.latestResultDice);
     const hasDiceResult = Number.isFinite(diceResult) && diceResult > 0;
     const parityResult =
@@ -296,12 +584,74 @@ export default function Game() {
       diceResult: hasDiceResult ? diceResult : null,
       parityResult,
     };
-  }, [snapshot.latestResultDice, snapshot.latestResultParity]);
+  }, [snapshot.latestResultDice, snapshot.latestResultParity]);*/
 
-  const round = useMemo(
+  // Inside Game component
+const latestResult = useMemo(() => {
+  const diceResult = Number(snapshot.latestResultDice);
+  const resultRoundId = parseRoundNumber(snapshot.latestSettledRound); // Get the ID of the settled result
+  const currentRoundId = parseRoundNumber(snapshot.currentRound);
+
+  const hasDiceResult = Number.isFinite(diceResult) && diceResult > 0;
+  const parityResult =
+    snapshot.latestResultParity === "Even" ? "even" :
+    snapshot.latestResultParity === "Odd" ? "odd" : null;
+  
+    // --- DEBUG LOG ---
+  /*console.log("🔍 [Dashboard Data State]:", {
+    displayingRound: currentRoundId,
+    contractReportsSettled: resultRoundId,
+    match: currentRoundId === resultRoundId ? "✅ MATCH" : "❌ MISMATCH (Waiting...)",
+    rawDiceValue: diceResult,
+    snapshotLoading
+  });*/
+
+  return {
+    diceResult: hasDiceResult ? diceResult : null,
+    parityResult,
+    resultRoundId, // Track which round this result actually belongs to
+  };
+}, [snapshot.latestResultDice, snapshot.latestResultParity, snapshot.latestSettledRound]);
+
+
+
+  /*const round = useMemo(
     () => buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading),
     [latestResult, roundCountdownLabel, snapshot, snapshotLoading]
+  );*/
+
+  const provider = useMemo(() => {
+    if (window.ethereum) return new ethers.BrowserProvider(window.ethereum);
+    return null;
+  }, []);
+
+  // UPDATE the round useMemo to include onChainData
+  const round = useMemo(
+    () => buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading, onChainData),
+    [latestResult, roundCountdownLabel, snapshot, snapshotLoading, onChainData]
   );
+
+  // ADD THE BLOCKCHAIN WATCHER EFFECT
+  useEffect(() => {
+    let interval;
+    // Poll the chain for the current round's settlement status during resolving
+    if (round.phase === "resolving" && round.roundId && !onChainData) {
+      interval = setInterval(async () => {
+        const data = await fetchChainTruth(
+            round.roundId, 
+            CONTRACT_ADDRESS, 
+            VOLTSONIC_ABI, 
+            provider
+        );
+        if (data && data.isSettled) {
+          setOnChainData(data);
+          clearInterval(interval);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [round.phase, round.roundId, provider, onChainData]);
+
 
   const getDiceMultiplier = (pick) => {
     const sidePool = round.dicePools[pick] || 0;
@@ -340,7 +690,57 @@ export default function Game() {
   }, [backendRounds, betHistory]);
 
   const isBettingOpen = !snapshotLoading && round.phase === "betting";
-  const showLatestResult = roundCountdownLabel === "Settling" && latestResult.diceResult !== null && latestResult.parityResult !== null;
+  // Only show result data when it matches the current round, otherwise advance to the next round state
+  const resultToShow = onChainData && round.roundId === onChainData.roundId ? onChainData : null;
+  const showLatestResult = !!resultToShow;
+
+  useEffect(() => {
+    if (onChainData && round.roundId && round.roundId !== onChainData.roundId) {
+      setOnChainData(null);
+    }
+  }, [round.roundId, onChainData]);
+
+  useEffect(() => {
+    if (!resultToShow || backendStatus !== "ready") {
+      return;
+    }
+    if (postedRoundIdRef.current === resultToShow.roundId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function pushRoundResult() {
+      try {
+        await postBackendJson("/api/v1/rounds", {
+          round_id: resultToShow.roundId,
+          settled: true,
+          randomness_requested: true,
+          randomness_fulfilled: true,
+          dice_result: resultToShow.diceResult,
+          parity_result: resultToShow.parityResult === "even",
+        });
+
+        if (!cancelled) {
+          postedRoundIdRef.current = resultToShow.roundId;
+          loadBackendData();
+        }
+      } catch (error) {
+        console.warn("Failed to push round result to backend:", error);
+      }
+    }
+
+    pushRoundResult();
+    return () => {
+      cancelled = true;
+    };
+  }, [backendStatus, loadBackendData, resultToShow]);
+
+  useEffect(() => {
+    if (round.phase === "starting" && roundCountdownLabel === "Starts in" && roundCountdown === "00:01") {
+      window.location.reload();
+    }
+  }, [round.phase, roundCountdown, roundCountdownLabel]);
 
   const handleQuickBet = async (dicePick, amount) => {
     const parsedAmount = parseTokenAmount(String(amount));
@@ -430,7 +830,7 @@ export default function Game() {
           <RoundTimer round={round} />
         </div>
 
-        <JackpotDisplay jackpotPool={round.jackpotPool} streak={0} loading={snapshotLoading} />
+        <JackpotDisplay jackpotPool={round.jackpotPool} streak={0} loading={snapshotLoading} voltPrice={voltPrice} />
 
         {snapshotLoading ? (
           <DashboardHeroSkeleton />
@@ -453,9 +853,10 @@ export default function Game() {
                   exit={{ opacity: 0 }}
                 >
                   <RoundResult
-                    roundId={latestResult.roundId}
-                    diceResult={latestResult.diceResult}
-                    parityResult={latestResult.parityResult}
+                    roundId={resultToShow.roundId || resultToShow.resultRoundId}
+                    diceResult={resultToShow.diceResult}
+                    parityResult={resultToShow.parityResult}
+                    resultRoundId={resultToShow.roundId || resultToShow.resultRoundId}
                   />
                 </motion.div>
               ) : (
@@ -471,6 +872,7 @@ export default function Game() {
                     getDiceMultiplier={getDiceMultiplier}
                     onSubmit={handleQuickBet}
                     disabled={!isBettingOpen || !account}
+                    voltPrice={voltPrice}
                   />
                 </motion.div>
               )}
@@ -511,7 +913,7 @@ export default function Game() {
 
         <HowToPlayPanel />
 
-        <BetHistoryPanel bets={betHistory} loading={snapshotLoading || betHistoryLoading} connected={Boolean(account)} />
+        <BetHistoryPanel bets={betHistory} loading={snapshotLoading || betHistoryLoading} connected={Boolean(account)} voltPrice={voltPrice} />
         <RoundHistoryPanel history={roundHistory} loading={snapshotLoading && roundHistory.length === 0} />
 
         <div className="text-center text-[10px] text-muted-foreground font-mono tracking-wider space-y-0.5">

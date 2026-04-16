@@ -35,6 +35,23 @@ class RoundRead(BaseModel):
         return format(value, "f")
 
 
+class RoundWrite(BaseModel):
+    round_id: int
+    settled: bool = True
+    randomness_requested: bool | None = None
+    randomness_fulfilled: bool | None = None
+    dice_result: int | None = None
+    parity_result: bool | None = None
+    total_dice_pool: Decimal | int | str = 0
+    total_parity_pool: Decimal | int | str = 0
+    snapshot_jackpot: Decimal | int | str = 0
+    total_jackpot_winners: int = 0
+    started_at: datetime | None = None
+    closed_at: datetime | None = None
+    settled_tx_hash: str | None = None
+    settlement_block_number: int | None = None
+
+
 class BetRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

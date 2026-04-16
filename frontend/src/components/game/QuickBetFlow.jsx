@@ -63,6 +63,7 @@ export function QuickBetFlow({
   getDiceMultiplier,
   onSubmit,
   disabled,
+  voltPrice,
 }) {
   const [step, setStep] = useState("dice");
   const [dicePick, setDicePick] = useState(null);
@@ -214,6 +215,11 @@ export function QuickBetFlow({
                     </div>*/}
                     <div className="text-[9px] font-mono text-muted-foreground mt-1">
                       {Number(dicePools?.[n] || 0).toFixed(2)} VOLT
+                      {voltPrice && (
+                        <div className="text-[8px] text-muted-foreground">
+                          ≈ ${(Number(dicePools?.[n] || 0) * voltPrice).toFixed(2)}
+                        </div>
+                      )}
                     </div>
                   </motion.button>
                 );
@@ -264,6 +270,13 @@ export function QuickBetFlow({
                 VOLT
               </span>
             </div>
+
+            {/* USD equivalent */}
+            {numAmount > 0 && voltPrice && (
+              <div className="text-right text-xs text-muted-foreground font-mono">
+                ≈ ${(numAmount * voltPrice).toFixed(2)} USD
+              </div>
+            )}
 
             {/* Return preview */}
             {numAmount > 0 && (

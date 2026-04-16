@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useVoltSonic } from "@/pages/Index";
 
 function DiceBadge({ value, className = "" }) {
   const dotsByValue = {
@@ -52,7 +53,7 @@ function DiceBadge({ value, className = "" }) {
   );
 }
 
-export function RoundResult({ roundId, diceResult, parityResult }) {
+/*export function RoundResult({ roundId, diceResult, parityResult }) {
   const [rolling, setRolling] = useState(true);
   const [currentFace, setCurrentFace] = useState(0);
 
@@ -125,7 +126,7 @@ export function RoundResult({ roundId, diceResult, parityResult }) {
             )}
           </AnimatePresence>
         </div>
-        {/*<div className="w-px h-10 bg-border" />*/}
+        {/*<div className="w-px h-10 bg-border" />/}
         <div className="text-center">
           {/*<motion.div
             className="text-3xl mb-1"
@@ -146,7 +147,109 @@ export function RoundResult({ roundId, diceResult, parityResult }) {
                 {parityResult.toUpperCase()}
               </motion.div>
             )}
-          </AnimatePresence>*/}
+          </AnimatePresence>/}
+        </div>
+      </div>
+    </motion.div>
+  );
+}*/
+
+export function RoundResult({ roundId, diceResult, parityResult, resultRoundId }) {
+  const [rolling, setRolling] = useState(true);
+  const [currentFace, setCurrentFace] = useState(0);
+
+  const { refreshSnapshot } = useVoltSonic();
+  console.log("RoundResult props:", { roundId, diceResult, parityResult, resultRoundId });
+  // Determine if the data we have is actually for the round we are watching
+  const isDataReady = diceResult !== null && Number(resultRoundId) === Number(roundId);
+
+  useEffect(() => {
+    // If data isn't for this round, keep rolling
+    if (!isDataReady) {
+      setRolling(true);
+      const rollInterval = setInterval(() => {
+        setCurrentFace(Math.floor(Math.random() * 6));
+      }, 80);
+      return () => clearInterval(rollInterval);
+    }
+
+    // Once data matches, perform the "final" roll sequence
+    let frame = 0;
+    const totalFrames = 10;
+    const interval = setInterval(() => {
+      frame++;
+      setCurrentFace(Math.floor(Math.random() * 6));
+      if (frame >= totalFrames) {
+        clearInterval(interval);
+        setCurrentFace(diceResult - 1);
+        setRolling(false);
+      }
+    }, 80);
+
+    return () => clearInterval(interval);
+  }, [isDataReady, diceResult]);
+
+  const hasReloadedRef = useRef(false);
+const reloadTimeoutRef = useRef(null);
+
+useEffect(() => {
+  if (!rolling && isDataReady && !hasReloadedRef.current) {
+    hasReloadedRef.current = true;
+
+    reloadTimeoutRef.current = setTimeout(() => {
+      window.location.reload();
+    }, 7000);
+  }
+
+  return () => {
+    if (reloadTimeoutRef.current) {
+      clearTimeout(reloadTimeoutRef.current);
+    }
+  };
+}, [rolling, isDataReady]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="rounded-xl border border-neon-cyan/30 bg-midnight-lighter/50 p-6 text-center space-y-4"
+    >
+      <div className="text-[10px] font-mono tracking-[0.2em] text-muted-foreground uppercase">
+        {isDataReady && !rolling ? `Round #${roundId} Result` : `Resolving Round #${roundId}...`}
+      </div>
+
+      <div className="flex flex-col items-center justify-center gap-4">
+        <motion.div
+          animate={rolling ? {
+            rotateY: [0, 360],
+            y: [0, -10, 0]
+          } : {
+            rotateY: 0,
+            y: 0,
+            scale: [1.2, 1]
+          }}
+          transition={rolling ? {
+            rotateY: { duration: 0.4, repeat: Infinity, ease: "linear" },
+            y: { duration: 0.2, repeat: Infinity, ease: "easeInOut" }
+          } : {
+            duration: 0.4, type: "spring"
+          }}
+        >
+          <DiceBadge value={currentFace + 1} />
+        </motion.div>
+
+        <div className="h-6"> {/* Fixed height to prevent layout shift */}
+          <AnimatePresence>
+            {!rolling && isDataReady && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-2xl font-black font-mono text-neon-green text-glow-green"
+              >
+                ROLLED {diceResult}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </motion.div>

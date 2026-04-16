@@ -83,6 +83,8 @@ export default function Wallet() {
     connectWallet,
     switchWallet,
     writeContract,
+    voltPrice,
+    refreshSnapshot
   } = useVoltSonic();
 
   const [customLimit, setCustomLimit] = useState("");
@@ -192,28 +194,40 @@ export default function Wallet() {
   const tokenExplorerUrl = snapshot.tokenAddress ? `${BASESCAN_TOKEN_URL}/${snapshot.tokenAddress}` : null;
   const showWinsSkeleton = snapshotLoading || winsLoading;
 
-  const handleClaim = (roundId, id) => {
+  const handleClaim = async (roundId, id) => {
     setClaimingId(id);
     toast.info(`Submitting claim for round #${roundId}...`);
-    writeContract(
+    const result = await writeContract(
       (contract) => contract.claim(BigInt(roundId)),
       `Claiming winnings for round #${roundId}...`,
       `Claim complete for round #${roundId}.`
     );
+
+    if (result?.ok) {
+      toast.success(`Successfully claimed winnings for round #${roundId}.`);
+      setClaimingId(null);
+      refreshSnapshot();
+    }
   };
 
-  const handleClaimLatest = () => {
+  const handleClaimLatest = async () => {
     if (!latestClaimRoundId) {
       toast.warning("No settled round is ready to claim yet.");
       return;
     }
     setClaimingId("latest");
     toast.info("Submitting latest claim...");
-    writeContract(
+    const result = await writeContract(
       (contract) => contract.claim(BigInt(latestClaimRoundId)),
       "Claiming latest winnings...",
       "Latest claim complete."
     );
+
+    if (result?.ok) {
+      toast.success(`Successfully claimed winnings for round #${latestClaimRoundId}.`);
+      setClaimingId(null);
+      refreshSnapshot();
+    }
   };
 
   const handleSetLimit = async (value) => {
@@ -241,6 +255,7 @@ export default function Wallet() {
     setUpdatingLimit(false);
 
     if (result?.ok) {
+      toast.success("Wallet spending limit updated successfully.");
       const numericValue = Number(stringValue);
       if (Number.isFinite(numericValue) && numericValue >= 0) {
         setConfiguredLimit(numericValue);
@@ -317,6 +332,11 @@ export default function Wallet() {
               </>
             )}
           </div>
+          {voltPrice && !snapshotLoading && (
+            <div className="text-sm text-muted-foreground font-mono">
+              ≈ ${(balance * voltPrice).toFixed(2)} USD
+            </div>
+          )}
           <div className="flex gap-2">
             <motion.button
               whileTap={{ scale: 0.95 }}
@@ -360,9 +380,16 @@ export default function Wallet() {
               {snapshotLoading ? (
                 <div className="h-3 w-24 rounded bg-muted/60 animate-pulse" />
               ) : (
-                <span className="text-muted-foreground">
-                  {spendingLimit.toFixed(4)} remaining
-                </span>
+                <div>
+                  <span className="text-muted-foreground">
+                    {spendingLimit.toFixed(4)} remaining
+                  </span>
+                  {voltPrice && (
+                    <div className="text-[9px] text-muted-foreground">
+                      ≈ ${(spendingLimit * voltPrice).toFixed(2)} USD
+                    </div>
+                  )}
+                </div>
               )}
               
             </div>
@@ -438,6 +465,11 @@ export default function Wallet() {
             {!showWinsSkeleton && totalClaimable > 0 ? (
               <span className="text-xs font-mono font-bold text-[hsl(var(--neon-green))]">
                 +{animatedClaimable.toFixed(5)} $VOLT
+                {voltPrice && (
+                  <div className="text-[10px] text-muted-foreground">
+                    ≈ ${(totalClaimable * voltPrice).toFixed(2)} USD
+                  </div>
+                )}
               </span>
             ) : null}
           </div>
@@ -482,9 +514,16 @@ export default function Wallet() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-[hsl(var(--neon-green))]">
-                      +{win.amount.toFixed(2)}
-                    </span>
+                    <div className="text-right">
+                      <span className="text-xs font-mono font-bold text-[hsl(var(--neon-green))]">
+                        +{win.amount.toFixed(2)}
+                      </span>
+                      {voltPrice && (
+                        <div className="text-[10px] font-mono text-muted-foreground">
+                          ≈ ${(win.amount * voltPrice).toFixed(2)}
+                        </div>
+                      )}
+                    </div>
                     {win.claimed ? (
                       <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-0.5">
                         <Check className="w-3 h-3" /> Claimed

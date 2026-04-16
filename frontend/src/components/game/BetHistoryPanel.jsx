@@ -60,7 +60,7 @@ function getOutcomeClasses(result) {
   return "border-secondary/30 bg-secondary/10 text-secondary";
 }
 
-function BetSection({ title, bets, emptyLabel }) {
+function BetSection({ title, bets, emptyLabel, voltPrice }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -97,7 +97,14 @@ function BetSection({ title, bets, emptyLabel }) {
               </div>
 
               <div className="mt-2 flex items-center justify-between gap-3 text-[11px] font-mono">
-                <span className="text-primary">{formatBetAmount(bet)}</span>
+                <div className="flex flex-col">
+                  <span className="text-primary">{formatBetAmount(bet)}</span>
+                  {voltPrice && (
+                    <span className="text-muted-foreground text-[10px]">
+                      ≈ ${(parseRawTokenAmount((BigInt(bet.diceAmount || 0n) + BigInt(bet.parityAmount || 0n)).toString()) * voltPrice).toFixed(2)}
+                    </span>
+                  )}
+                </div>
                 <span className="text-muted-foreground">
                   {formatRelativeTime(bet.updatedAt || bet.createdAt)}
                 </span>
@@ -114,7 +121,7 @@ function BetSection({ title, bets, emptyLabel }) {
   );
 }
 
-export function BetHistoryPanel({ bets = [], loading = false, connected = false }) {
+export function BetHistoryPanel({ bets = [], loading = false, connected = false, voltPrice }) {
   const { openBets, closedBets } = useMemo(() => {
     const sortedBets = [...bets].sort((left, right) => {
       const leftTimestamp = Date.parse(String(left.updatedAt || left.createdAt || "")) || 0;
@@ -193,11 +200,13 @@ export function BetHistoryPanel({ bets = [], loading = false, connected = false 
             title="OPEN BETS"
             bets={openBets}
             emptyLabel="No open bets right now."
+            voltPrice={voltPrice}
           />
           <BetSection
             title="CLOSED BETS"
             bets={closedBets}
             emptyLabel="No closed bets yet."
+            voltPrice={voltPrice}
           />
         </div>
       )}

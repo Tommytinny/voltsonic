@@ -36,21 +36,11 @@ const App = () => {
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {launchLive ? (
-            <>
               <Route path="/" element={<Game />} />
               <Route path="/game" element={<Game />} />
               <Route path="/wallet" element={<Wallet />} />
-              <Route path="/launch" element={<Countdown />} />
               <Route path="/test" element={<Test />} />
-            </>
-          ) : (
-            <>
-              <Route path="/" element={<Countdown />} />
-              <Route path="/launch" element={<Countdown />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </>
-          )}
+            
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -27,7 +27,7 @@ export function GameSelector({ active, onChange }) {
               <motion.div
                 layoutId="game-tab-glow"
                 className="absolute inset-0 rounded-xl"
-                style={{ boxShadow: "0 0 20px hsl(var(--neon-cyan) / 0.15)" }}
+                style={{ boxShadow: "0 0 20px color-mix(in oklch, var(--primary) 15%, transparent)" }}
               />
             )}
             <div className="relative flex items-center gap-2">

@@ -27,7 +27,7 @@ export function CountdownTimer({ endTime, isLocked }) {
     ? "hsl(var(--muted-foreground))"
     : isUrgent
     ? "hsl(var(--neon-red))"
-    : "hsl(var(--neon-cyan))";
+    : "var(--primary)";
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -55,7 +55,7 @@ export function CountdownTimer({ endTime, isLocked }) {
             style={{
               filter: isUrgent && !isLocked
                 ? "drop-shadow(0 0 8px hsl(350 90% 55% / 0.6))"
-                : "drop-shadow(0 0 6px hsl(185 100% 50% / 0.4))",
+                : "drop-shadow(0 0 6px color-mix(in oklch, var(--primary) 40%, transparent))",
             }}
           />
         </svg>

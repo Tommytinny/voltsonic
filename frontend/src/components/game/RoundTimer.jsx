@@ -47,9 +47,9 @@ export function RoundTimer({ round }) {
   const strokeDashoffset = circumference * (1 - progress);
 
   const phaseColors = {
-    betting: isUrgent ? "hsl(var(--neon-red))" : "hsl(var(--neon-cyan))",
-    locked: "hsl(var(--neon-pink))",
-    starting: "hsl(var(--secondary))",
+    betting: isUrgent ? "hsl(var(--neon-red))" : "var(--primary)",
+    locked: "var(--secondary)",
+    starting: "var(--secondary)",
     resolving: "hsl(var(--neon-green))",
     resolved: "hsl(var(--muted-foreground))",
   };

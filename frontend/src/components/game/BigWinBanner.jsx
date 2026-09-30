@@ -15,7 +15,7 @@ export function BigWinBanner({ bigWin }) {
         >
           <div
             className="max-w-lg mx-auto rounded-xl border border-secondary/50 bg-card px-4 py-3 flex items-center gap-3"
-            style={{ boxShadow: "0 0 40px hsl(var(--neon-pink) / 0.3), 0 4px 20px hsl(0 0% 0% / 0.5)" }}
+            style={{ boxShadow: "0 0 40px color-mix(in oklch, var(--secondary) 30%, transparent), 0 4px 20px hsl(0 0% 0% / 0.5)" }}
           >
             <PartyPopper className="w-5 h-5 text-secondary animate-bounce shrink-0" />
             <div className="flex-1 min-w-0">

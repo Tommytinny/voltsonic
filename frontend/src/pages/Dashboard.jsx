@@ -477,7 +477,7 @@ function DashboardHeroSkeleton() {
       className="rounded-2xl border border-border bg-card p-4 space-y-4"
       style={{
         boxShadow:
-          "0 0 40px hsl(var(--neon-cyan) / 0.04), 0 0 80px hsl(var(--neon-pink) / 0.02)",
+          "0 0 40px color-mix(in oklch, var(--primary) 4%, transparent), 0 0 80px color-mix(in oklch, var(--secondary) 2%, transparent)",
       }}
     >
       <div className="grid grid-cols-2 gap-3">
@@ -807,9 +807,9 @@ const latestResult = useMemo(() => {
 
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-[hsl(185_100%_50%)]" />
+          <Zap className="w-5 h-5 text-primary" />
           <span className="font-black text-lg tracking-tight text-foreground">
-            VOLT<span className="text-[hsl(185_100%_50%)]">SONIC</span>
+            VOLT<span className="text-primary">SONIC</span>
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -860,7 +860,7 @@ const latestResult = useMemo(() => {
             className="rounded-2xl border border-border bg-card p-4 space-y-4"
             style={{
               boxShadow:
-                "0 0 40px hsl(var(--neon-cyan) / 0.04), 0 0 80px hsl(var(--neon-pink) / 0.02)",
+                "0 0 40px color-mix(in oklch, var(--primary) 4%, transparent), 0 0 80px color-mix(in oklch, var(--secondary) 2%, transparent)",
             }}
           >
             <AnimatePresence mode="wait">

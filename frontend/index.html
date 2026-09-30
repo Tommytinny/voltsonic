@@ -19,57 +19,57 @@
         theme: {
           extend: {
             colors: {
-              "primary-fixed-dim": "#003ecb",
-              "tertiary-fixed-dim": "#b091ff",
+              "primary-fixed-dim": "var(--primary)",
+              "tertiary-fixed-dim": "var(--secondary)",
               "on-surface": "#dee5ff",
-              "on-secondary-fixed-variant": "#005966",
-              "on-primary-fixed": "#d9e7ff",
-              "surface-container": "#0f1930",
+              "on-secondary-fixed-variant": "#d7e8dc",
+              "on-primary-fixed": "var(--primary-foreground)",
+              "surface-container": "var(--card)",
               "error-container": "#b92902",
-              "tertiary-fixed": "#bda2ff",
-              "on-primary-container": "#d9e7ff",
-              "surface-bright": "#1f2b49",
-              primary: "#0052ff",
-              "on-tertiary-fixed-variant": "#4600a8",
-              "on-primary": "#f5f9ff",
-              tertiary: "#ac8aff",
+              "tertiary-fixed": "var(--secondary)",
+              "on-primary-container": "var(--primary-foreground)",
+              "surface-bright": "var(--muted)",
+              primary: "var(--primary)",
+              "on-tertiary-fixed-variant": "var(--foreground)",
+              "on-primary": "var(--primary-foreground)",
+              tertiary: "var(--secondary)",
               "surface-container-lowest": "#000000",
-              "surface-container-high": "#141f38",
+              "surface-container-high": "var(--card)",
               "inverse-on-surface": "#4d556b",
-              "on-primary-fixed-variant": "#c3d8ff",
-              "inverse-primary": "#7fb0ff",
-              "secondary-fixed-dim": "#29d6f1",
+              "on-primary-fixed-variant": "var(--primary-foreground)",
+              "inverse-primary": "var(--primary)",
+              "secondary-fixed-dim": "var(--secondary)",
               "on-error-container": "#ffd2c8",
-              background: "#060e20",
+              background: "var(--background)",
               "error-dim": "#d53d18",
               "tertiary-container": "#8f60fa",
               outline: "#6d758c",
               "inverse-surface": "#faf8ff",
-              "primary-dim": "#003ecb",
-              "primary-fixed": "#1f6fff",
-              "on-secondary-fixed": "#003a43",
+              "primary-dim": "var(--primary)",
+              "primary-fixed": "var(--primary)",
+              "on-secondary-fixed": "var(--secondary-foreground)",
               "on-error": "#450900",
-              "secondary-dim": "#1ad0eb",
+              "secondary-dim": "var(--secondary)",
               "on-tertiary-container": "#000000",
-              "secondary-fixed": "#48e4ff",
-              "on-tertiary": "#280067",
-              "on-tertiary-fixed": "#1f0052",
+              "secondary-fixed": "var(--secondary)",
+              "on-tertiary": "var(--secondary-foreground)",
+              "on-tertiary-fixed": "var(--secondary-foreground)",
               "outline-variant": "#40485d",
               error: "#ff7351",
-              "surface-tint": "#0052ff",
-              "surface-dim": "#060e20",
-              "surface-container-highest": "#192540",
+              "surface-tint": "var(--primary)",
+              "surface-dim": "var(--background)",
+              "surface-container-highest": "var(--muted)",
               "on-background": "#dee5ff",
-              "surface-container-low": "#091328",
-              "secondary-container": "#006877",
-              "primary-container": "#0a4ae0",
-              surface: "#060e20",
-              "on-secondary": "#004b56",
+              "surface-container-low": "var(--background)",
+              "secondary-container": "var(--secondary)",
+              "primary-container": "var(--primary)",
+              surface: "var(--background)",
+              "on-secondary": "var(--secondary-foreground)",
               "on-surface-variant": "#a3aac4",
-              "on-secondary-container": "#eafbff",
-              "tertiary-dim": "#8455ef",
-              "surface-variant": "#192540",
-              secondary: "#3adffa",
+              "on-secondary-container": "var(--secondary-foreground)",
+              "tertiary-dim": "var(--secondary)",
+              "surface-variant": "var(--muted)",
+              secondary: "var(--secondary)",
             },
             fontFamily: {
               headline: ["Space Grotesk"],
@@ -94,11 +94,11 @@
       ring-primary\/40 {
     @supports (color: color-mix(in lab, red, red)) {
         --tw-ring-color: 
-color-mix(in oklab, hsl(var(--primary)) 40%, transparent);
+      color-mix(in oklab, var(--primary) 40%, transparent);
     }
 }
 .ring-primary\/40 {
-    --tw-ring-color: hsl(var(--primary));
+    --tw-ring-color: var(--primary);
 }
 .ring-1 {
     --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
@@ -111,14 +111,14 @@ color-mix(in oklab, hsl(var(--primary)) 40%, transparent);
 .bg-primary\/15 {
     @supports (color: color-mix(in lab, red, red)) {
         background-color: 
-color-mix(in oklab, hsl(var(--primary)) 15%, transparent);
+      color-mix(in oklab, var(--primary) 15%, transparent);
     }
 }
 .bg-primary\/15 {
-    background-color: hsl(var(--primary));
+  background-color: color-mix(in oklch, var(--primary) 15%, transparent);
 }
 .border-primary {
-    border-color: hsl(var(--primary));
+    border-color: var(--primary);
 }
     </style>
     <script type="module" src="/src/main.jsx"></script>

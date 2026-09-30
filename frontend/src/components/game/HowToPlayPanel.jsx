@@ -40,7 +40,7 @@ export function HowToPlayPanel() {
       className="rounded-2xl border border-border bg-card"
       style={{
         boxShadow:
-          "0 0 40px hsl(var(--neon-cyan) / 0.03), 0 0 80px hsl(var(--neon-pink) / 0.015)",
+          "0 0 40px color-mix(in oklch, var(--primary) 3%, transparent), 0 0 80px color-mix(in oklch, var(--secondary) 2%, transparent)",
       }}
     >
       <button

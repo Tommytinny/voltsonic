@@ -23,7 +23,7 @@ export function JackpotDisplay({ jackpotPool, streak, loading = false, voltPrice
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       className="rounded-xl border border-secondary/30 bg-secondary/5 p-4 space-y-2"
-      style={{ boxShadow: "0 0 30px hsl(var(--neon-pink) / 0.1)" }}
+      style={{ boxShadow: "0 0 30px color-mix(in oklch, var(--secondary) 10%, transparent)" }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

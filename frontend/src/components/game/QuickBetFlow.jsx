@@ -156,7 +156,7 @@ export function QuickBetFlow({
           <div key={s} className="flex items-center flex-1">
             <motion.div
               className={`h-1 rounded-full flex-1 transition-colors duration-300 ${
-                i <= stepIndex ? "bg-[hsl(185_100%_50%)]" : "bg-muted"
+                i <= stepIndex ? "bg-primary" : "bg-muted"
               }`}
               animate={i === stepIndex ? { opacity: [0.6, 1, 0.6] } : { opacity: 1 }}
               transition={i === stepIndex ? { repeat: Infinity, duration: 1.5 } : {}}
@@ -176,7 +176,7 @@ export function QuickBetFlow({
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="inline-flex items-center gap-1 rounded border border-[hsl(185_100%_50%)] bg-[hsl(var(185_100%_50%)] px-1.5 py-0.5 text-[9px] font-mono font-bold text-[hsl(185_100%_50%)]"
+              className="inline-flex items-center gap-1 rounded border border-primary bg-primary/10 px-1.5 py-0.5 text-[9px] font-mono font-bold text-primary"
             >
               <DiceBadge value={dicePick} className="h-5 w-5" />
               {dicePick}
@@ -390,7 +390,7 @@ export function QuickBetFlow({
               whileHover={{ scale: 1.02 }}
               onClick={goNext}
               disabled={!canProceed}
-              className="flex items-center gap-1 px-4 py-2 rounded-[0.75rem] text-xs font-bold bg-[hsl(185_100%_50%)] text-[hsl(230_25%_7%)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-1 px-4 py-2 rounded-[0.75rem] text-xs font-bold bg-primary text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               {step === "amount" ? "Review" : "Next"} <ChevronRight className="w-3.5 h-3.5" />
             </motion.button>

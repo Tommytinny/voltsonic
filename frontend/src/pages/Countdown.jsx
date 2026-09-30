@@ -57,7 +57,7 @@ export default function Countdown() {
   return (
     <div className="min-h-screen bg-background text-foreground px-4 py-8">
       <main className="mx-auto max-w-3xl rounded-3xl border border-border bg-card p-10 shadow-[0_0_60px_rgba(8,145,178,0.12)]">
-        <div className="flex items-center gap-3 text-[hsl(185_100%_50%)]">
+        <div className="flex items-center gap-3 text-primary">
           <Rocket className="h-8 w-8" />
           <div>
             <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground">Launching soon</p>
@@ -88,7 +88,7 @@ export default function Countdown() {
         
 
         {remaining.completed && (
-          <div className="mt-10 rounded-3xl border border-[hsl(185_100%_50%)] bg-[hsl(185_100%_50%)/10] p-6 text-center text-sm font-semibold text-[hsl(185_100%_50%)]">
+          <div className="mt-10 rounded-3xl border border-primary bg-primary/10 p-6 text-center text-sm font-semibold text-primary">
             Launch time has arrived! Refresh the app or head to the game page now.
           </div>
         )}

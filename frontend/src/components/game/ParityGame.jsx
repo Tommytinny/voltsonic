@@ -28,7 +28,7 @@ export function ParityGame({
         <motion.div
           className="absolute inset-y-0 left-0 rounded-l-full"
           style={{
-            background: "linear-gradient(90deg, hsl(var(--neon-cyan) / 0.8), hsl(var(--neon-cyan) / 0.3))",
+            background: "linear-gradient(90deg, color-mix(in oklch, var(--primary) 80%, transparent), color-mix(in oklch, var(--primary) 30%, transparent))",
           }}
           animate={{ width: `${evenPercent}%` }}
           transition={{ type: "spring", stiffness: 120, damping: 20 }}

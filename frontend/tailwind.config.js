@@ -22,15 +22,15 @@ export default {
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
+        ring: "var(--ring)",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
+          DEFAULT: "var(--primary)",
           foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
+          DEFAULT: "var(--secondary)",
           foreground: "hsl(var(--secondary-foreground))",
         },
         destructive: {
@@ -42,7 +42,7 @@ export default {
           foreground: "hsl(var(--muted-foreground))",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
+          DEFAULT: "var(--accent)",
           foreground: "hsl(var(--accent-foreground))",
         },
         popover: {
@@ -56,16 +56,16 @@ export default {
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
-          primary: "hsl(var(--sidebar-primary))",
+          primary: "var(--sidebar-primary)",
           "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
           accent: "hsl(var(--sidebar-accent))",
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
-          ring: "hsl(var(--sidebar-ring))",
+          ring: "var(--sidebar-ring)",
         },
         neon: {
-          cyan: "hsl(var(--neon-cyan))",
-          pink: "hsl(var(--neon-pink))",
+          cyan: "var(--neon-cyan)",
+          pink: "var(--neon-pink)",
           green: "hsl(var(--neon-green))",
           red: "hsl(var(--neon-red))",
         },

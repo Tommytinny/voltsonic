@@ -33,7 +33,7 @@ const Toaster = ({
         {
           "--normal-bg": "hsl(var(--midnight-light) / 0.96)",
           "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "hsl(var(--primary) / 0.2)",
+          "--normal-border": "color-mix(in oklch, var(--primary) 20%, transparent)",
           "--border-radius": "var(--radius)"
         }
       }

@@ -223,7 +223,7 @@ function DiceIcon({ number, selected = false }) {
     <div
       className={`relative h-10 w-10 sm:h-12 sm:w-12 rounded-lg border-2 transition-all ${
         selected
-          ? "border-primary bg-primary/10 shadow-[0_0_12px_rgba(0,82,255,0.4)] scale-105"
+          ? "border-primary bg-primary/10 shadow-[0_0_12px_color-mix(in_oklch,var(--primary)_40%,transparent)] scale-105"
           : "border-outline-variant bg-white shadow-sm"
       }`}
     >
@@ -436,7 +436,7 @@ function ToastStack({ toasts, dismissToast }) {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto overflow-hidden border px-4 py-3 shadow-[0_0_18px_rgba(0,82,255,0.12)] backdrop-blur-md transition-all duration-300 ${styles.shell}`}
+            className={`pointer-events-auto overflow-hidden border px-4 py-3 shadow-[0_0_18px_color-mix(in_oklch,var(--primary)_12%,transparent)] backdrop-blur-md transition-all duration-300 ${styles.shell}`}
           >
             <div className="flex items-start gap-3">
               <span className={`material-symbols-outlined mt-0.5 text-[20px] ${styles.iconClass}`}>{styles.icon}</span>
@@ -466,7 +466,7 @@ function ResultModal({ resultModal, dismissResultModal }) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md border border-primary/40 bg-[#081427] p-5 shadow-[0_0_30px_rgba(0,82,255,0.18)]">
+      <div className="w-full max-w-md border border-primary/40 bg-card p-5 shadow-[0_0_30px_color-mix(in_oklch,var(--primary)_18%,transparent)]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="font-headline text-lg font-bold uppercase tracking-tight text-white">

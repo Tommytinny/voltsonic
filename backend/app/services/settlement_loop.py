@@ -29,11 +29,10 @@ async def settle_due_rounds(session: AsyncSession) -> int:
         curr_state = contract.functions.getCurrentRoundState().call()
         current_rid = int(curr_state[0])
         close_time = int(curr_state[7])
-        is_settled = False
         
         # Check if current round is ready for settlement
         current_timestamp = datetime.now(UTC).timestamp()
-        if current_timestamp >= close_time and not is_settled:
+        if current_timestamp >= close_time:
             try:
                 # Generate backend randomness
                 random_word = random.randint(0, 2**256 - 1)
@@ -76,7 +75,7 @@ async def backend_settlement_loop():
     Checks every configured interval for rounds that have closed and need settlement.
     """
     settings = get_settings()
-    settlement_interval = int(settings.__dict__.get("settlement_check_interval", 10))
+    settlement_interval = settings.settlement_check_interval
     
     logger.info(f"Starting backend settlement loop with {settlement_interval}s interval")
     

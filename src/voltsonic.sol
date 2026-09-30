@@ -65,12 +65,6 @@ contract VoltSonic is
     uint256 public totalEthContributed; // Legacy name; tracks total VOLT inflow into the contract.
     uint256 public totalHouseFeesCollected;
     address public houseFeeRecipient;
-    uint256 public lastRandomRequestId;
-    address public vrfCoordinator;
-    bytes32 public vrfKeyHash;
-    uint256 public vrfSubscriptionId;
-    uint16 public vrfRequestConfirmations;
-    uint32 public vrfCallbackGasLimit;
     bool public bettingOpen;
     uint256 public totalVaultDeposits;
     IERC20Lite public voltToken;
@@ -98,16 +92,12 @@ contract VoltSonic is
         uint256 snapshotJackpot; 
         uint256 startTime;
         uint256 closeTime;
-        bool randomnessRequested;
-        bool randomnessFulfilled;
-        uint256 randomnessRequestId;
         mapping(uint256 => uint256) diceBettorCounts;
         mapping(bool => uint256) parityBettorCounts;
     }
 
     mapping(uint256 => Round) public rounds;
     mapping(address => mapping(uint256 => Bet)) public userBets;
-    mapping(uint256 => uint256) public requestToRound;
 
     // --- Events ---
     event BetPlaced(
@@ -122,8 +112,6 @@ contract VoltSonic is
     event WinningsCredited(address indexed user, uint256 indexed roundId, uint256 amount);
     event JackpotRollover(uint256 indexed roundId, uint256 amountAdded);
     event BettingStatusUpdated(bool isOpen);
-    event RandomnessRequested(uint256 indexed roundId, uint256 indexed requestId);
-    event RandomnessFulfilled(uint256 indexed roundId, uint256 indexed requestId, uint256 randomWord, uint256 finalDice);
     event HouseFeeRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event VoltTokenUpdated(address indexed previousToken, address indexed newToken);
 
@@ -146,8 +134,6 @@ contract VoltSonic is
         houseFeeRecipient = initialOwner;
         roundDuration = 3 minutes;
         intermissionDuration = 1 minutes;
-        vrfRequestConfirmations = 3;
-        vrfCallbackGasLimit = 250000;
         bettingOpen = true;
         _initializeRound(currentRid, true);
     }
@@ -174,31 +160,7 @@ contract VoltSonic is
 
     function _canRequestSettlement(uint256 _rid) internal view returns (bool) {
         Round storage round = rounds[_rid];
-        return block.timestamp >= round.closeTime && !round.settled && !round.randomnessRequested;
-    }
-
-    function _requestRoundSettlement(uint256 _rid) internal returns (uint256 requestId) {
-        Round storage round = rounds[_rid];
-
-        require(vrfCoordinator != address(0), "VRF not configured");
-
-        requestId = IVRFCoordinatorV2Plus(vrfCoordinator).requestRandomWords(
-            VRFV2PlusClientLite.RandomWordsRequest({
-                keyHash: vrfKeyHash,
-                subId: vrfSubscriptionId,
-                requestConfirmations: vrfRequestConfirmations,
-                callbackGasLimit: vrfCallbackGasLimit,
-                numWords: 1,
-                extraArgs: VRFV2PlusClientLite.argsToBytes(VRFV2PlusClientLite.ExtraArgsV1({nativePayment: false}))
-            })
-        );
-
-        lastRandomRequestId = requestId;
-        round.randomnessRequested = true;
-        round.randomnessRequestId = requestId;
-        requestToRound[requestId] = _rid;
-
-        emit RandomnessRequested(_rid, requestId);
+        return block.timestamp >= round.closeTime && !round.settled;
     }
 
     function _advanceToNextRound(uint256 _rid) internal {
@@ -296,10 +258,14 @@ contract VoltSonic is
         emit BetPlaced(msg.sender, currentRid, _diceAmount, _parityAmount, _diceNum, _isEven);
     }
 
-    function requestRoundSettlement() external onlyOwner returns (uint256 requestId) {
-        _initializeRound(currentRid);
-        require(_canRequestSettlement(currentRid), "Settlement request not ready");
-        requestId = _requestRoundSettlement(currentRid);
+    function settleRound(uint256 _rid, uint256 _randomWord) external onlyOwner {
+        Round storage round = rounds[_rid];
+
+        require(block.timestamp >= round.closeTime, "Round not closed");
+        require(!round.settled, "Round already settled");
+
+        uint256 finalDice = (_randomWord % 6) + 1;
+        _settleRoundWithDice(_rid, finalDice);
     }
 
     function checkUpkeep(bytes calldata)
@@ -326,28 +292,8 @@ contract VoltSonic is
             return;
         }
 
-        _requestRoundSettlement(roundId);
-    }
-
-    function rawFulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords) external {
-        require(msg.sender == vrfCoordinator, "Only VRF coordinator");
-        require(_randomWords.length > 0, "Missing random words");
-
-        uint256 roundId = requestToRound[_requestId];
-        require(_requestId != 0 && roundId == currentRid, "Unknown request");
-
-        Round storage round = rounds[roundId];
-        require(round.randomnessRequestId == _requestId, "Unknown request");
-        require(round.randomnessRequested, "Randomness not requested");
-        require(!round.randomnessFulfilled, "Randomness already fulfilled");
-        require(!round.settled, "Round already settled");
-
-        round.randomnessFulfilled = true;
-        uint256 randomWord = _randomWords[0];
-        uint256 finalDice = (randomWord % 6) + 1;
-
-        emit RandomnessFulfilled(roundId, _requestId, randomWord, finalDice);
-        _settleRoundWithDice(roundId, finalDice);
+        // Backend will call settleRound with randomness
+        // This is just a notification that settlement is needed
     }
 
     function claim(uint256 _rid) external nonReentrant {
@@ -496,15 +442,6 @@ contract VoltSonic is
         );
     }
 
-    function getRoundRandomnessState(uint256 _rid)
-        external
-        view
-        returns (bool randomnessRequested, bool randomnessFulfilled, uint256 randomnessRequestId)
-    {
-        Round storage round = rounds[_rid];
-        return (round.randomnessRequested, round.randomnessFulfilled, round.randomnessRequestId);
-    }
-
     function getClaimPreview(address _user, uint256 _rid)
         external
         view
@@ -557,23 +494,6 @@ contract VoltSonic is
     function setIntermissionDuration(uint256 _newDuration) external onlyOwner {
         intermissionDuration = _newDuration;
     }
-    function configureRandomness(
-        address _vrfCoordinator,
-        bytes32 _vrfKeyHash,
-        uint256 _vrfSubscriptionId,
-        uint16 _vrfRequestConfirmations,
-        uint32 _vrfCallbackGasLimit
-    ) external onlyOwner {
-        require(_vrfCoordinator != address(0), "Coordinator required");
-        require(_vrfRequestConfirmations > 0, "Confirmations required");
-        require(_vrfCallbackGasLimit > 0, "Callback gas required");
-
-        vrfCoordinator = _vrfCoordinator;
-        vrfKeyHash = _vrfKeyHash;
-        vrfSubscriptionId = _vrfSubscriptionId;
-        vrfRequestConfirmations = _vrfRequestConfirmations;
-        vrfCallbackGasLimit = _vrfCallbackGasLimit;
-    }
     function seedJackpot(uint256 amount) external onlyOwner {
         require(amount > 0, "Amount required");
         _pullVolt(msg.sender, amount);
@@ -613,7 +533,7 @@ contract VoltSonic is
         round.parityResult = (_dice % 2 == 0);
         round.snapshotJackpot = jackpotBalance;
         round.settled = true;
-        emit RoundSettled(_rid, _dice, round.parityResult, round.snapshotJackpot);
+        emit RoundSettled(_rid, _dice, round.parityResult, jackpotBalance);
         _advanceToNextRound(_rid);
     }
 

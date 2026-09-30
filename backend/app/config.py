@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     indexer_start_block: int = 0
     indexer_block_chunk_size: int = 10
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"])
+    settlement_check_interval: int = 10  # Check for due rounds every N seconds
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

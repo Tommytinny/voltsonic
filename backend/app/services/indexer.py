@@ -133,7 +133,6 @@ async def sync_contract_state(
             try:
                 # Fetch detailed state from contract at time of settlement
                 summary = contract.functions.getRoundSummary(round_id).call()
-                randomness = contract.functions.getRoundRandomnessState(round_id).call()
 
                 round_record.total_dice_pool = _decimal_string(int(summary[0]))
                 round_record.total_parity_pool = _decimal_string(int(summary[1]))
@@ -142,8 +141,6 @@ async def sync_contract_state(
                 round_record.parity_result = bool(summary[4])
                 round_record.settled = bool(summary[5])
                 round_record.snapshot_jackpot = _decimal_string(int(summary[6]))
-                round_record.randomness_requested = bool(randomness[0])
-                round_record.randomness_fulfilled = bool(randomness[1])
                 round_record.settled_tx_hash = log["transactionHash"].hex()
                 round_record.settlement_block_number = log["blockNumber"]
                 round_record.closed_at = _utc_datetime_from_timestamp(ts)

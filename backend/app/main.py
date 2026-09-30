@@ -5,14 +5,14 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import bets, health, rounds, sync
+from app.api.routes import health
+from app.api import websocket
 from app.config import get_settings
 from app.db import Base, engine
-from app.services.settlement_loop import backend_settlement_loop
-
+from app.services.scheduler import round_lifecycle_scheduler
 
 logger = logging.getLogger(__name__)
-settlement_task: asyncio.Task | None = None
+scheduler_task: asyncio.Task | None = None
 
 
 @asynccontextmanager
@@ -21,20 +21,20 @@ async def lifespan(_: FastAPI):
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     
-    # Start settlement loop
-    global settlement_task
-    settlement_task = asyncio.create_task(backend_settlement_loop())
-    logger.info("Backend settlement loop started")
+    # Start round lifecycle scheduler
+    global scheduler_task
+    scheduler_task = asyncio.create_task(round_lifecycle_scheduler())
+    logger.info("Round lifecycle scheduler started")
     
     yield
     
     # Shutdown
-    if settlement_task:
-        settlement_task.cancel()
+    if scheduler_task:
+        scheduler_task.cancel()
         try:
-            await settlement_task
+            await scheduler_task
         except asyncio.CancelledError:
-            logger.info("Backend settlement loop stopped")
+            logger.info("Round lifecycle scheduler stopped")
 
 
 settings = get_settings()
@@ -48,7 +48,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
 app.include_router(health.router)
-app.include_router(rounds.router)
-app.include_router(bets.router)
-app.include_router(sync.router)
+app.include_router(websocket.router)

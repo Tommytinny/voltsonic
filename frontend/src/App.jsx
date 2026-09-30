@@ -40,7 +40,7 @@ const App = () => {
               <Route path="/game" element={<Game />} />
               <Route path="/wallet" element={<Wallet />} />
               <Route path="/test" element={<Test />} />
-            
+             
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

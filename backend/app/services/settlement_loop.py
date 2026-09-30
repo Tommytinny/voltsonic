@@ -29,10 +29,11 @@ async def settle_due_rounds(session: AsyncSession) -> int:
         curr_state = contract.functions.getCurrentRoundState().call()
         current_rid = int(curr_state[0])
         close_time = int(curr_state[7])
+        is_settled = curr_state[1]  # Check if already settled
         
         # Check if current round is ready for settlement
         current_timestamp = datetime.now(UTC).timestamp()
-        if current_timestamp >= close_time:
+        if current_timestamp >= close_time and not is_settled:
             try:
                 # Generate backend randomness
                 random_word = random.randint(0, 2**256 - 1)
@@ -71,13 +72,18 @@ async def settle_due_rounds(session: AsyncSession) -> int:
 
 async def backend_settlement_loop():
     """
-    Runs continuously to settle rounds on a scheduled basis.
-    Checks every configured interval for rounds that have closed and need settlement.
+    Runs continuously to manage the game lifecycle:
+    1. Checks every configured interval for rounds that have closed
+    2. Settles closed rounds with backend-generated randomness
+    3. Allows frontend to listen for round events and update accordingly
+    
+    This removes the dependency on Chainlink VRF and gives complete control to the backend.
     """
     settings = get_settings()
     settlement_interval = settings.settlement_check_interval
     
     logger.info(f"Starting backend settlement loop with {settlement_interval}s interval")
+    logger.info("Backend is now responsible for: starting rounds, checking for closure, and settling with randomness")
     
     while True:
         try:

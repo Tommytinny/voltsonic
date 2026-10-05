@@ -16,6 +16,17 @@ const ROBINHOOD_RPC_URL = import.meta.env.VITE_ROBINHOOD_RPC_URL || "https://rpc
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
 const ROUND_DURATION_SECONDS = Number(import.meta.env.VITE_VOLTSONIC_ROUND_DURATION_SECONDS || 180);
 
+function isMobileBrowser() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function hasInjectedMetaMask() {
+  const injectedProvider = window.ethereum;
+  return injectedProvider?.isMetaMask === true
+    || injectedProvider?.providers?.some((provider) => provider.isMetaMask === true) === true;
+}
+
 export function shortAddress(value) {
   return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "Not connected";
 }
@@ -1233,6 +1244,12 @@ export function useVoltSonic() {
   async function connectWallet(connector) {
     if (!connector) {
       notify("No compatible wallet connector is available.", "warning", "Wallet Required");
+      return false;
+    }
+
+    if (connector.id.toLowerCase().includes("metamask") && isMobileBrowser() && !hasInjectedMetaMask()) {
+      const dappUrl = `${window.location.host}${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.location.assign(`https://metamask.app.link/dapp/${dappUrl}`);
       return false;
     }
 

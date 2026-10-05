@@ -5,7 +5,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import bets, health, rounds, sync
+from app.api.routes import bets, health, rounds
 from app.config import get_settings
 from app.db import Base, engine
 from app.services.settlement_loop import backend_settlement_loop
@@ -51,4 +51,3 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(rounds.router)
 app.include_router(bets.router)
-app.include_router(sync.router)

@@ -1,22 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Shield, Gift, ArrowUpRight, ArrowDownLeft, Settings, Check, Copy, ExternalLink, Wallet as WalletIcon } from "lucide-react";
+import { Zap, Shield, Gift, ArrowUpRight, ArrowDownLeft, Settings, Check, Copy, ExternalLink, Wallet as WalletIcon, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
-import { useVoltSonic, parseTokenAmount, shortAddress } from "./Index.jsx";
-import { VOLT_ERC20_ABI } from "@/lib/contract";
+import { useVoltSonic, shortAddress } from "./Index.jsx";
+import { WalletConnectModal } from "@/components/game/WalletConnectModal";
+import { SHOW_BACKEND_TOASTS } from "@/lib/featureFlags";
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
-const BASESCAN_TOKEN_URL = "https://sepolia.basescan.org/token";
-const PRESET_LIMITS = [0.001, 0.00, 250, 500, 1000];
-
-function getSpendLimitStorageKey(account) {
-  return account ? `voltsonic:spend-limit:${account.toLowerCase()}` : "";
-}
-
 function parseFormattedAmount(value) {
   const match = String(value || "").match(/-?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : 0;
@@ -81,44 +75,30 @@ export default function Wallet() {
     account,
     backendStatus,
     connectWallet,
-    switchWallet,
+    disconnectWallet,
+    connectors,
     writeContract,
-    voltPrice,
     refreshSnapshot
   } = useVoltSonic();
 
-  const [customLimit, setCustomLimit] = useState("");
-  const [showLimitEditor, setShowLimitEditor] = useState(true);
   const [wins, setWins] = useState([]);
   const [claimingId, setClaimingId] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [configuredLimit, setConfiguredLimit] = useState(0);
-  const [updatingLimit, setUpdatingLimit] = useState(false);
   const [winsLoading, setWinsLoading] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const previousBackendStatusRef = useRef(backendStatus);
   const hasLoadedWinsRef = useRef(false);
 
   useEffect(() => {
     if (previousBackendStatusRef.current !== backendStatus) {
-      if (backendStatus === "ready") {
+      if (SHOW_BACKEND_TOASTS && backendStatus === "ready") {
         toast.success("Wallet data is live.");
-      } else if (backendStatus === "offline") {
+      } else if (SHOW_BACKEND_TOASTS && backendStatus === "offline") {
         toast.warning("Server is ofline. Some wallet history may be unavailable.");
       }
       previousBackendStatusRef.current = backendStatus;
     }
   }, [backendStatus]);
-
-  useEffect(() => {
-    if (!account) {
-      setConfiguredLimit(0);
-      return;
-    }
-
-    const storedValue = window.localStorage.getItem(getSpendLimitStorageKey(account));
-    const parsedValue = Number(storedValue || 0);
-    setConfiguredLimit(Number.isFinite(parsedValue) ? parsedValue : 0);
-  }, [account]);
 
   useEffect(() => {
     if (!account || backendStatus !== "ready") {
@@ -172,12 +152,6 @@ export default function Wallet() {
   }, [account, backendStatus, snapshot.latestSettledRound, snapshot.claimNet]);
 
   const balance = parseFormattedAmount(snapshot.credits);
-  const spendingLimit = parseFormattedAmount(snapshot.tokenAllowance);
-  const effectiveConfiguredLimit = Math.max(configuredLimit, spendingLimit);
-  const spentThisRound = useMemo(
-    () => Math.max(effectiveConfiguredLimit - spendingLimit, 0),
-    [effectiveConfiguredLimit, spendingLimit]
-  );
   const totalClaimable = useMemo(
     () => wins.filter((win) => !win.claimed).reduce((sum, win) => sum + win.amount, 0),
     [wins]
@@ -190,15 +164,13 @@ export default function Wallet() {
 
   const animatedBalance = useAnimatedCounter(balance);
   const animatedClaimable = useAnimatedCounter(totalClaimable);
-  const limitUsedPercent = effectiveConfiguredLimit > 0 ? Math.min((spentThisRound / effectiveConfiguredLimit) * 100, 100) : 0;
-  const tokenExplorerUrl = snapshot.tokenAddress ? `${BASESCAN_TOKEN_URL}/${snapshot.tokenAddress}` : null;
   const showWinsSkeleton = snapshotLoading || winsLoading;
 
   const handleClaim = async (roundId, id) => {
     setClaimingId(id);
     toast.info(`Submitting claim for round #${roundId}...`);
     const result = await writeContract(
-      (contract) => contract.claim(BigInt(roundId)),
+      { functionName: "claim", args: [BigInt(roundId)] },
       `Claiming winnings for round #${roundId}...`,
       `Claim complete for round #${roundId}.`
     );
@@ -218,7 +190,7 @@ export default function Wallet() {
     setClaimingId("latest");
     toast.info("Submitting latest claim...");
     const result = await writeContract(
-      (contract) => contract.claim(BigInt(latestClaimRoundId)),
+      { functionName: "claim", args: [BigInt(latestClaimRoundId)] },
       "Claiming latest winnings...",
       "Latest claim complete."
     );
@@ -227,42 +199,6 @@ export default function Wallet() {
       toast.success(`Successfully claimed winnings for round #${latestClaimRoundId}.`);
       setClaimingId(null);
       refreshSnapshot();
-    }
-  };
-
-  const handleSetLimit = async (value) => {
-    const stringValue = String(value);
-    if (!snapshot.tokenAddress) {
-      toast.error("Token contract is not available yet.");
-      return;
-    }
-    if (!account) {
-      toast.warning("Connect your wallet before updating the spend limit.");
-      return;
-    }
-    setUpdatingLimit(true);
-    toast.info("Updating wallet spend limit...");
-    const result = await writeContract(
-      async (_contract, signer) => {
-        const amount = parseTokenAmount(stringValue);
-        if (amount <= 0n) throw new Error("Enter a VOLT amount");
-        const tokenContract = new ethers.Contract(snapshot.tokenAddress, VOLT_ERC20_ABI, signer);
-        return tokenContract.approve(CONTRACT_ADDRESS, amount);
-      },
-      "Updating wallet spend limit...",
-      "Wallet spend limit updated."
-    );
-    setUpdatingLimit(false);
-
-    if (result?.ok) {
-      toast.success("Wallet spending limit updated successfully.");
-      const numericValue = Number(stringValue);
-      if (Number.isFinite(numericValue) && numericValue >= 0) {
-        setConfiguredLimit(numericValue);
-        window.localStorage.setItem(getSpendLimitStorageKey(account), String(numericValue));
-      }
-      setShowLimitEditor(false);
-      setCustomLimit("");
     }
   };
 
@@ -293,12 +229,25 @@ export default function Wallet() {
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={account ? switchWallet : connectWallet}
+            onClick={() => setWalletModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-muted text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
           >
             <WalletIcon className="w-3.5 h-3.5" />
             {account ? shortAddress(account) : "Connect"}
           </motion.button>
+          {account ? (
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={async () => {
+                if (await disconnectWallet()) toast.success("Wallet disconnected.");
+              }}
+              aria-label="Disconnect wallet"
+              title="Disconnect wallet"
+              className="flex h-9 w-9 items-center justify-center border border-border bg-muted text-muted-foreground transition-colors hover:border-rose-500/50 hover:text-rose-400"
+            >
+              <LogOut className="h-4 w-4" />
+            </motion.button>
+          ) : null}
         </div>
       </header>
 
@@ -313,7 +262,7 @@ export default function Wallet() {
             <div className="text-[10px] font-mono text-muted-foreground tracking-widest">BALANCE</div>
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={account ? handleCopyAddress : connectWallet}
+              onClick={account ? handleCopyAddress : () => setWalletModalOpen(true)}
               className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md bg-muted"
             >
               <span>{account ? shortAddress(account) : "Connect wallet"}</span>
@@ -328,19 +277,14 @@ export default function Wallet() {
                 <span className="text-4xl font-black font-mono text-foreground tabular-nums">
                   {animatedBalance.toFixed(5)}
                 </span>
-                <span className="text-sm font-bold text-primary">$VOLT</span>
+                <span className="text-sm font-bold text-primary">ETH</span>
               </>
             )}
           </div>
-          {voltPrice && !snapshotLoading && (
-            <div className="text-sm text-muted-foreground font-mono">
-              ≈ ${(balance * voltPrice).toFixed(2)} USD
-            </div>
-          )}
           <div className="flex gap-2">
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={account ? switchWallet : connectWallet}
+              onClick={() => setWalletModalOpen(true)}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[15px] bg-primary text-primary-foreground text-xs font-bold tracking-wider"
             >
               <ArrowDownLeft className="w-3.5 h-3.5" /> {account ? "SWITCH WALLET" : "CONNECT WALLET"}
@@ -361,94 +305,13 @@ export default function Wallet() {
           transition={{ delay: 0.05 }}
           className="rounded-2xl border border-border bg-card p-4 space-y-3"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-primary" />
-              <span className="text-xs font-bold text-foreground tracking-wide">SPENDING LIMIT</span>
-            </div>
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setShowLimitEditor((current) => !current)}
-              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-            >
-              <Settings className="w-4 h-4 text-muted-foreground" />
-            </motion.button>
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" />
+            <span className="text-xs font-bold text-foreground tracking-wide">NATIVE ETH BETTING</span>
           </div>
-
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-[10px] font-mono">
-              {snapshotLoading ? (
-                <div className="h-3 w-24 rounded bg-muted/60 animate-pulse" />
-              ) : (
-                <div>
-                  <span className="text-muted-foreground">
-                    {spendingLimit.toFixed(4)} remaining
-                  </span>
-                  {voltPrice && (
-                    <div className="text-[9px] text-muted-foreground">
-                      ≈ ${(spendingLimit * voltPrice).toFixed(2)} USD
-                    </div>
-                  )}
-                </div>
-              )}
-              
-            </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              {snapshotLoading ? (
-                <div className="h-full w-2/5 rounded-full bg-muted-foreground/20 animate-pulse" />
-              ) : (
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${limitUsedPercent}%` }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className={`h-full rounded-full ${
-                    limitUsedPercent > 80
-                      ? "bg-destructive"
-                      : limitUsedPercent > 50
-                        ? "bg-[hsl(var(--neon-green))]"
-                        : "bg-primary"
-                  }`}
-                />
-              )}
-            </div>
-            {snapshotLoading ? (
-              <div className="h-3 w-56 rounded bg-muted/60 animate-pulse" />
-            ) : (
-              <p className="text-[10px] text-muted-foreground">
-                Live ERC-20 allowance remaining after your current open bets
-              </p>
-            )}
-          </div>
-
-          <AnimatePresence>
-            {showLimitEditor && !snapshotLoading && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden space-y-2"
-              >
-            
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    placeholder="Custom..."
-                    value={customLimit}
-                    onChange={(event) => setCustomLimit(event.target.value)}
-                    className="flex-1 bg-[hsl(230_20%_16%)] border border-[hsl(230_20%_18%)] rounded-[0.75rem] px-3 py-1.5 text-xs font-mono text-[hsl(210_40%_96%)] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => handleSetLimit(customLimit)}
-                    disabled={!parseFloat(customLimit) || !snapshot.tokenAddress || updatingLimit}
-                    className="px-3 py-1.5 rounded-[var(0.75rem)] bg-primary text-primary-foreground text-xs font-bold disabled:opacity-30"
-                  >
-                    {updatingLimit ? "WAIT..." : "SET"}
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <p className="text-sm text-muted-foreground">
+            Bets are sent directly with each transaction. Keep enough ETH in your wallet for the stake and network gas.
+          </p>
         </motion.div>
 
         <motion.div
@@ -464,12 +327,7 @@ export default function Wallet() {
             </div>
             {!showWinsSkeleton && totalClaimable > 0 ? (
               <span className="text-xs font-mono font-bold text-[hsl(var(--neon-green))]">
-                +{animatedClaimable.toFixed(5)} $VOLT
-                {voltPrice && (
-                  <div className="text-[10px] text-muted-foreground">
-                    ≈ ${(totalClaimable * voltPrice).toFixed(2)} USD
-                  </div>
-                )}
+                +{animatedClaimable.toFixed(5)} ETH
               </span>
             ) : null}
           </div>
@@ -516,13 +374,8 @@ export default function Wallet() {
                   <div className="flex items-center gap-2">
                     <div className="text-right">
                       <span className="text-xs font-mono font-bold text-[hsl(var(--neon-green))]">
-                        +{win.amount.toFixed(2)}
+                        +{win.amount.toFixed(5)} ETH
                       </span>
-                      {voltPrice && (
-                        <div className="text-[10px] font-mono text-muted-foreground">
-                          ≈ ${(win.amount * voltPrice).toFixed(2)}
-                        </div>
-                      )}
                     </div>
                     {win.claimed ? (
                       <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-0.5">
@@ -550,6 +403,12 @@ export default function Wallet() {
           )}
         </motion.div>
       </main>
+      <WalletConnectModal
+        open={walletModalOpen}
+        connectors={connectors}
+        onConnect={connectWallet}
+        onClose={() => setWalletModalOpen(false)}
+      />
     </div>
   );
 }

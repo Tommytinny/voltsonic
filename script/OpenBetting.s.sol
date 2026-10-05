@@ -7,14 +7,14 @@ import {VoltSonic} from "../src/voltsonic.sol";
 contract OpenBetting is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address payable proxyAddress = payable(vm.envAddress("VOLTSONIC_PROXY_ADDRESS"));
+        address payable contractAddress = payable(vm.envAddress("VOLTSONIC_CONTRACT_ADDRESS"));
 
         vm.startBroadcast(deployerPrivateKey);
 
-        VoltSonic(proxyAddress).setBettingOpen(true);
+        VoltSonic(contractAddress).setBettingOpen(true);
 
         vm.stopBroadcast();
 
-        console2.log("Betting opened for proxy:", proxyAddress);
+        console2.log("Betting opened for contract:", contractAddress);
     }
 }

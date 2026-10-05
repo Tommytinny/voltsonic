@@ -106,7 +106,7 @@ export function RoundHistoryPanel({ history, loading = false }) {
                 {r.parityResult === "even" ? "EVEN" : "ODD"}
               </span>
               <span className="text-[8px] font-mono text-muted-foreground">
-                {r.totalPool} VOLT
+                {r.totalPool} ETH
               </span>*/}
             </motion.div>
           )) : (

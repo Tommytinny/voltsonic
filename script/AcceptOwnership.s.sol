@@ -7,16 +7,16 @@ import {VoltSonic} from "../src/voltsonic.sol";
 contract AcceptOwnership is Script {
     function run() external {
         uint256 pendingOwnerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address payable proxyAddress = payable(vm.envAddress("VOLTSONIC_PROXY_ADDRESS"));
+        address payable contractAddress = payable(vm.envAddress("VOLTSONIC_CONTRACT_ADDRESS"));
         address pendingOwnerAddress = vm.addr(pendingOwnerPrivateKey);
 
         vm.startBroadcast(pendingOwnerPrivateKey);
 
-        VoltSonic(proxyAddress).acceptOwnership();
+        VoltSonic(contractAddress).acceptOwnership();
 
         vm.stopBroadcast();
 
-        console2.log("Accepted ownership for proxy:", proxyAddress);
+        console2.log("Accepted ownership for contract:", contractAddress);
         console2.log("New owner:", pendingOwnerAddress);
     }
 }

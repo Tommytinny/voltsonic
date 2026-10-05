@@ -1,0 +1,1 @@
+export const SHOW_BACKEND_TOASTS = import.meta.env.VITE_SHOW_BACKEND_TOASTS !== "false";

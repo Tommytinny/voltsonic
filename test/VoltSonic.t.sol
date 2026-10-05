@@ -2,132 +2,10 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {VoltSonic, VRFV2PlusClientLite} from "../src/voltsonic.sol";
-
-contract MockERC20 {
-    string public constant name = "Volt";
-    string public constant symbol = "VOLT";
-    uint8 public constant decimals = 18;
-
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-
-    function mint(address to, uint256 amount) external {
-        balanceOf[to] += amount;
-    }
-
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-        return true;
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        _transfer(msg.sender, to, amount);
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        uint256 allowed = allowance[from][msg.sender];
-        require(allowed >= amount, "ERC20: insufficient allowance");
-        allowance[from][msg.sender] = allowed - amount;
-        _transfer(from, to, amount);
-        return true;
-    }
-
-    function _transfer(address from, address to, uint256 amount) internal {
-        require(balanceOf[from] >= amount, "ERC20: transfer exceeds balance");
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-    }
-}
-
-contract SimpleERC1967Proxy {
-    bytes32 private constant IMPLEMENTATION_SLOT =
-        bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
-
-    constructor(address implementation, bytes memory initData) payable {
-        bytes32 slot = IMPLEMENTATION_SLOT;
-        assembly {
-            sstore(slot, implementation)
-        }
-
-        if (initData.length > 0) {
-            (bool success, bytes memory returndata) = implementation.delegatecall(initData);
-            if (!success) {
-                assembly {
-                    revert(add(returndata, 32), mload(returndata))
-                }
-            }
-        }
-    }
-
-    fallback() external payable {
-        _delegate();
-    }
-
-    receive() external payable {
-        _delegate();
-    }
-
-    function _delegate() internal {
-        bytes32 slot = IMPLEMENTATION_SLOT;
-        assembly {
-            let implementation := sload(slot)
-            calldatacopy(0, 0, calldatasize())
-            let result := delegatecall(gas(), implementation, 0, calldatasize(), 0, 0)
-            returndatacopy(0, 0, returndatasize())
-
-            switch result
-            case 0 { revert(0, returndatasize()) }
-            default { return(0, returndatasize()) }
-        }
-    }
-}
-
-contract MockVRFCoordinatorV2 {
-    uint256 internal nextRequestId = 1;
-
-    function requestRandomWords(
-        VRFV2PlusClientLite.RandomWordsRequest calldata
-    ) external returns (uint256 requestId) {
-        requestId = nextRequestId++;
-    }
-
-    function fulfillRandomWords(address consumer, uint256 requestId, uint256 randomWord) external {
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = randomWord;
-        VoltSonic(payable(consumer)).rawFulfillRandomWords(requestId, randomWords);
-    }
-}
-
-contract VoltSonicV2 is VoltSonic {
-    function version() external pure returns (uint256) {
-        return 2;
-    }
-}
-
-contract VoltSonicTokenRecovery is VoltSonic {
-    function version() external pure returns (uint256) {
-        return 3;
-    }
-}
-
-contract BadUpgradeTarget {
-    function version() external pure returns (uint256) {
-        return 999;
-    }
-}
-
-contract WrongSlotUpgradeTarget is VoltSonic {
-    function proxiableUUID() external pure override returns (bytes32) {
-        return bytes32(uint256(123));
-    }
-}
+import {VoltSonic} from "../src/voltsonic.sol";
 
 contract VoltSonicTest is Test {
     VoltSonic internal game;
-    MockVRFCoordinatorV2 internal vrfCoordinator;
-    MockERC20 internal voltToken;
 
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
@@ -135,27 +13,15 @@ contract VoltSonicTest is Test {
     receive() external payable {}
 
     function setUp() public {
-        voltToken = new MockERC20();
-        VoltSonic implementation = new VoltSonic();
-        SimpleERC1967Proxy proxy =
-            new SimpleERC1967Proxy(
-                address(implementation), abi.encodeCall(VoltSonic.initialize, (address(this), address(voltToken)))
-            );
-
-        game = VoltSonic(payable(address(proxy)));
-        vrfCoordinator = new MockVRFCoordinatorV2();
-        game.configureRandomness(address(vrfCoordinator), bytes32(uint256(1)), 1, 3, 250000);
+        vm.deal(address(this), 100 ether);
+        vm.deal(alice, 100 ether);
+        vm.deal(bob, 100 ether);
+        game = new VoltSonic(address(this));
     }
 
     function testInitializeAllowsCustomOwner() public {
         address customOwner = makeAddr("customOwner");
-        VoltSonic implementation = new VoltSonic();
-        SimpleERC1967Proxy proxy =
-            new SimpleERC1967Proxy(
-                address(implementation), abi.encodeCall(VoltSonic.initialize, (customOwner, address(voltToken)))
-            );
-
-        VoltSonic customOwnedGame = VoltSonic(payable(address(proxy)));
+        VoltSonic customOwnedGame = new VoltSonic(customOwner);
         assertEq(customOwnedGame.owner(), customOwner);
     }
 
@@ -170,7 +36,6 @@ contract VoltSonicTest is Test {
         assertTrue(game.bettingOpen());
         assertEq(game.currentRid(), 0);
         assertEq(game.jackpotBalance(), 0);
-        assertEq(address(game.voltToken()), address(voltToken));
     }
 
     function testOwnerCanTransferOwnershipInTwoSteps() public {
@@ -205,64 +70,18 @@ contract VoltSonicTest is Test {
         game.transferOwnership(address(0));
     }
 
-    function testOwnerCanRestoreTokenAddressAfterUpgrade() public {
-        VoltSonicTokenRecovery implementation = new VoltSonicTokenRecovery();
-        MockERC20 replacementToken = new MockERC20();
-        game.upgradeTo(address(implementation));
-
-        game.setVoltToken(address(replacementToken));
-        assertEq(address(game.voltToken()), address(replacementToken));
-
-        game.setVoltToken(address(voltToken));
-        assertEq(address(game.voltToken()), address(voltToken));
-    }
-
-    function testNonOwnerCannotRestoreTokenAddress() public {
-        vm.prank(alice);
-        vm.expectRevert("Ownable: caller is not the owner");
-        game.setVoltToken(address(voltToken));
-    }
-
-    function testUpgradeRejectsNonUUPSImplementation() public {
-        BadUpgradeTarget badTarget = new BadUpgradeTarget();
-
-        vm.expectRevert("UUPSUpgradeable: unsupported proxiableUUID");
-        game.upgradeTo(address(badTarget));
-    }
-
-    function testUpgradeRejectsWrongStorageSlotImplementation() public {
-        WrongSlotUpgradeTarget wrongSlot = new WrongSlotUpgradeTarget();
-
-        vm.expectRevert("UUPSUpgradeable: unsupported storage slot");
-        game.upgradeTo(address(wrongSlot));
-    }
-
-    function testMintAndApprovalHelperFundsPlayerWallet() public {
-        _charge(alice, 2 ether);
-
-        assertEq(voltToken.balanceOf(alice), 2 ether);
-        assertEq(voltToken.allowance(alice, address(game)), 2 ether);
-        assertEq(game.totalVaultDeposits(), 0);
-        assertEq(game.totalEthContributed(), 0);
-        assertEq(voltToken.balanceOf(address(game)), 0);
-    }
-
-    function testTotalEthContributedTracksTokenInflows() public {
-        _charge(alice, 2 ether);
-        _charge(bob, 1 ether);
+    function testTotalEthContributedTracksBetAndJackpotInflows() public {
+        _placeBet(alice, 2, true, 1 ether, 0);
+        _placeBet(bob, 3, false, 1 ether, 0);
         _seedJackpot(0.5 ether);
 
-        assertEq(game.totalEthContributed(), 0.5 ether);
-        assertEq(game.totalVaultDeposits(), 0.5 ether);
+        assertEq(game.totalEthContributed(), 2.5 ether);
+        assertEq(game.totalEthEscrowed(), 2.5 ether);
         assertEq(game.jackpotBalance(), 0.5 ether);
-        assertEq(voltToken.balanceOf(address(game)), 0.5 ether);
     }
 
     function testPlaceBetStoresExplicitPerGameAmounts() public {
-        _charge(alice, 2 ether);
-
-        vm.prank(alice);
-        game.placeBet(4, true, 1 ether, 0.5 ether);
+        _placeBet(alice, 4, true, 1 ether, 0.5 ether);
 
         (
             uint256 diceChoice,
@@ -281,16 +100,23 @@ contract VoltSonicTest is Test {
         assertTrue(betOnDice);
         assertTrue(betOnParity);
         assertFalse(claimed);
-        assertEq(voltToken.balanceOf(alice), 0.5 ether);
-        assertEq(game.totalVaultDeposits(), 1.5 ether);
-        assertEq(voltToken.balanceOf(address(game)), 1.5 ether);
+        assertEq(game.totalEthEscrowed(), 1.5 ether);
+    }
+
+    function testPlaceBetRequiresExactNativeEthValue() public {
+        vm.deal(alice, 2 ether);
+        vm.prank(alice);
+        vm.expectRevert("Incorrect ETH value");
+        game.placeBet{value: 0.9 ether}(4, true, 1 ether, 0);
+
+        vm.deal(alice, 2 ether);
+        vm.prank(alice);
+        vm.expectRevert("Incorrect ETH value");
+        game.placeBet{value: 1.1 ether}(4, true, 1 ether, 0);
     }
 
     function testGetCurrentRoundStateReturnsFrontendSummary() public {
-        _charge(alice, 2 ether);
-
-        vm.prank(alice);
-        game.placeBet(3, false, 1 ether, 0.5 ether);
+        _placeBet(alice, 3, false, 1 ether, 0.5 ether);
 
         (
             uint256 roundId,
@@ -331,14 +157,10 @@ contract VoltSonicTest is Test {
     }
 
     function testSettlingRoundInitializesNextRoundTiming() public {
-        _charge(alice, 1 ether);
-
-        vm.prank(alice);
-        game.placeBet(2, true, 1 ether, 0);
+        _placeBet(alice, 2, true, 1 ether, 0);
 
         vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 1);
+        game.settleRound(0, 1);
 
         (
             uint256 roundId,
@@ -357,14 +179,8 @@ contract VoltSonicTest is Test {
     }
 
     function testGetCurrentPoolStatsReturnsPoolAmountsAndBettorCounts() public {
-        _charge(alice, 3 ether);
-        _charge(bob, 3 ether);
-
-        vm.prank(alice);
-        game.placeBet(3, true, 1 ether, 0.5 ether);
-
-        vm.prank(bob);
-        game.placeBet(3, false, 0.75 ether, 0.25 ether);
+        _placeBet(alice, 3, true, 1 ether, 0.5 ether);
+        _placeBet(bob, 3, false, 0.75 ether, 0.25 ether);
 
         (
             uint256[6] memory dicePoolAmounts,
@@ -384,10 +200,7 @@ contract VoltSonicTest is Test {
     }
 
     function testGetUserBetReturnsPlacedBet() public {
-        _charge(alice, 2 ether);
-
-        vm.prank(alice);
-        game.placeBet(5, false, 1 ether, 0.5 ether);
+        _placeBet(alice, 5, false, 1 ether, 0.5 ether);
 
         (
             uint256 diceChoice,
@@ -409,17 +222,14 @@ contract VoltSonicTest is Test {
     }
 
     function testCannotPlaceTwoBetsInSameRound() public {
-        _charge(alice, 3 ether);
-
-        vm.startPrank(alice);
-        game.placeBet(2, true, 1 ether, 0);
+        _placeBet(alice, 2, true, 1 ether, 0);
+        vm.deal(alice, 1 ether);
+        vm.prank(alice);
         vm.expectRevert("Bet already placed for round");
-        game.placeBet(5, false, 1 ether, 0);
-        vm.stopPrank();
+        game.placeBet{value: 1 ether}(5, false, 1 ether, 0);
     }
 
     function testCannotBetWhenBettingIsClosed() public {
-        _charge(alice, 1 ether);
         game.setBettingOpen(false);
 
         vm.prank(alice);
@@ -428,10 +238,7 @@ contract VoltSonicTest is Test {
     }
 
     function testBettingClosesAutomaticallyAfterRoundTime() public {
-        _charge(alice, 1 ether);
-
-        vm.prank(alice);
-        game.placeBet(2, true, 1 ether, 0);
+        _placeBet(alice, 2, true, 1 ether, 0);
 
         vm.warp(block.timestamp + 3 minutes + 1);
 
@@ -454,17 +261,13 @@ contract VoltSonicTest is Test {
     }
 
     function testSettleRoundRequiresBettingWindowToCloseWhenBetsExist() public {
-        _charge(alice, 1 ether);
+        _placeBet(alice, 2, true, 1 ether, 0);
 
-        vm.prank(alice);
-        game.placeBet(2, true, 1 ether, 0);
-
-        vm.expectRevert("Settlement request not ready");
-        game.requestRoundSettlement();
+        vm.expectRevert("Round not closed");
+        game.settleRound(0, 1);
 
         vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 1);
+        game.settleRound(0, 1);
 
         (
             uint256 totalDicePool,
@@ -486,82 +289,12 @@ contract VoltSonicTest is Test {
         assertEq(game.currentRid(), 1);
     }
 
-    function testRandomnessMustBeRequestedBeforeFulfillment() public {
-        vm.expectRevert("Unknown request");
-        vrfCoordinator.fulfillRandomWords(address(game), 1, 7);
-    }
-
-    function testRandomnessRequestMarksRoundAndMapsRequestId() public {
-        _charge(alice, 1 ether);
-
-        vm.prank(alice);
-        game.placeBet(6, true, 1 ether, 0);
-
-        vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-
-        assertEq(requestId, 1);
-        assertEq(game.lastRandomRequestId(), 1);
-        assertEq(game.requestToRound(requestId), 0);
-
-        (bool randomnessRequested, bool randomnessFulfilled, uint256 randomnessRequestId) =
-            game.getRoundRandomnessState(0);
-
-        assertTrue(randomnessRequested);
-        assertFalse(randomnessFulfilled);
-        assertEq(randomnessRequestId, requestId);
-    }
-
-    function testCheckUpkeepSignalsOnlyAfterSettlementWindowCloses() public {
-        _charge(alice, 1 ether);
-
-        vm.prank(alice);
-        game.placeBet(6, true, 1 ether, 0);
-
-        (bool upkeepNeededBefore, bytes memory performDataBefore) = game.checkUpkeep("");
-        assertFalse(upkeepNeededBefore);
-        assertEq(abi.decode(performDataBefore, (uint256)), 0);
+    function testOwnerSettlementAdvancesRoundAndAcceptsNewBets() public {
+        _placeBet(alice, 6, true, 1 ether, 0);
 
         vm.warp(block.timestamp + 3 minutes + 1);
 
-        (bool upkeepNeededAfter, bytes memory performDataAfter) = game.checkUpkeep("");
-        assertTrue(upkeepNeededAfter);
-        assertEq(abi.decode(performDataAfter, (uint256)), 0);
-    }
-
-    function testPerformUpkeepRequestsRandomnessForCurrentRound() public {
-        _charge(alice, 1 ether);
-
-        vm.prank(alice);
-        game.placeBet(6, true, 1 ether, 0);
-
-        vm.warp(block.timestamp + 3 minutes + 1);
-
-        game.performUpkeep(abi.encode(uint256(0)));
-
-        uint256 requestId = game.lastRandomRequestId();
-        assertEq(requestId, 1);
-        assertEq(game.requestToRound(requestId), 0);
-
-        (bool randomnessRequested, bool randomnessFulfilled, uint256 randomnessRequestId) =
-            game.getRoundRandomnessState(0);
-
-        assertTrue(randomnessRequested);
-        assertFalse(randomnessFulfilled);
-        assertEq(randomnessRequestId, requestId);
-    }
-
-    function testFulfillmentAutoStartsNextRoundAndAcceptsNewBets() public {
-        _charge(alice, 2 ether);
-
-        vm.prank(alice);
-        game.placeBet(6, true, 1 ether, 0);
-
-        vm.warp(block.timestamp + 3 minutes + 1);
-
-        game.performUpkeep(abi.encode(uint256(0)));
-        uint256 requestId = game.lastRandomRequestId();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 8);
+        game.settleRound(0, 8);
 
         (
             uint256 roundId,
@@ -587,8 +320,7 @@ contract VoltSonicTest is Test {
 
         vm.warp(block.timestamp + 1 minutes);
 
-        vm.prank(alice);
-        game.placeBet(2, false, 0.5 ether, 0);
+        _placeBet(alice, 2, false, 0.5 ether, 0);
 
         (, , uint256 newRoundDiceAmount, , bool betOnDice, , ) = game.getUserBet(alice, 1);
         assertEq(newRoundDiceAmount, 0.5 ether);
@@ -596,14 +328,10 @@ contract VoltSonicTest is Test {
     }
 
     function testNextRoundWaitsForIntermissionBeforeBettingOpens() public {
-        _charge(alice, 2 ether);
-
-        vm.prank(alice);
-        game.placeBet(6, true, 1 ether, 0);
+        _placeBet(alice, 6, true, 1 ether, 0);
 
         vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 8);
+        game.settleRound(0, 8);
 
         (
             uint256 roundId,
@@ -627,15 +355,9 @@ contract VoltSonicTest is Test {
         assertTrue(isBettingOpen);
     }
 
-    function testPerformUpkeepDoesNothingWhenNotNeeded() public {
-        game.performUpkeep("");
-        assertEq(game.lastRandomRequestId(), 0);
-    }
-
     function testEmptyRoundSettlementAdvancesRoundAndStoresResults() public {
         vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 3);
+        game.settleRound(0, 3);
 
         (
             ,
@@ -656,52 +378,32 @@ contract VoltSonicTest is Test {
     }
 
     function testWinningClaimCreditsNetPayoutAndHouseFee() public {
-        _charge(alice, 2 ether);
         _seedJackpot(1 ether);
 
-        vm.prank(alice);
-        game.placeBet(4, true, 1 ether, 1 ether);
+        _placeBet(alice, 4, true, 1 ether, 1 ether);
 
         vm.warp(block.timestamp + 3 minutes + 1);
 
-        uint256 ownerBalanceBefore = voltToken.balanceOf(address(this));
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 3);
+        uint256 ownerBalanceBefore = address(this).balance;
+        game.settleRound(0, 3);
 
         vm.prank(alice);
         game.claim(0);
 
-        assertEq(voltToken.balanceOf(alice), 2.96 ether);
-        assertEq(game.totalVaultDeposits(), 0.008 ether);
+        assertEq(alice.balance, 2.96 ether);
+        assertEq(game.totalEthEscrowed(), 0.008 ether);
         assertEq(game.jackpotBalance(), 0.008 ether);
         assertEq(game.totalHouseFeesCollected(), 0.04 ether);
-        assertEq(voltToken.balanceOf(address(this)) - ownerBalanceBefore, 0.032 ether);
-    }
-
-    function testOwnerCanUpgradeProxyAndPreserveState() public {
-        _charge(alice, 1 ether);
-
-        VoltSonicV2 implementationV2 = new VoltSonicV2();
-        game.upgradeTo(address(implementationV2));
-
-        VoltSonicV2 upgraded = VoltSonicV2(payable(address(game)));
-        assertEq(upgraded.version(), 2);
-        assertEq(upgraded.owner(), address(this));
-        assertEq(address(upgraded.voltToken()), address(voltToken));
-        assertEq(upgraded.currentRid(), 0);
-        assertEq(upgraded.intermissionDuration(), 1 minutes);
+        assertEq(address(this).balance - ownerBalanceBefore, 0.032 ether);
     }
 
     function testGetClaimPreviewReturnsExpectedPayoutBreakdown() public {
-        _charge(alice, 2 ether);
         _seedJackpot(1 ether);
 
-        vm.prank(alice);
-        game.placeBet(4, true, 1 ether, 1 ether);
+        _placeBet(alice, 4, true, 1 ether, 1 ether);
 
         vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 3);
+        game.settleRound(0, 3);
 
         (
             uint256 poolReward,
@@ -719,15 +421,12 @@ contract VoltSonicTest is Test {
     }
 
     function testGetRoundSummaryReturnsSettledRoundData() public {
-        _charge(alice, 2 ether);
         _seedJackpot(1 ether);
 
-        vm.prank(alice);
-        game.placeBet(4, true, 1 ether, 1 ether);
+        _placeBet(alice, 4, true, 1 ether, 1 ether);
 
         vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 3);
+        game.settleRound(0, 3);
 
         (
             uint256 totalDicePool,
@@ -749,19 +448,13 @@ contract VoltSonicTest is Test {
     }
 
     function testMultipleJackpotWinnersSplitSnapshotWithoutFeeOnJackpot() public {
-        _charge(alice, 2 ether);
-        _charge(bob, 2 ether);
         _seedJackpot(1 ether);
 
-        vm.prank(alice);
-        game.placeBet(4, true, 1 ether, 1 ether);
-
-        vm.prank(bob);
-        game.placeBet(4, true, 1 ether, 1 ether);
+        _placeBet(alice, 4, true, 1 ether, 1 ether);
+        _placeBet(bob, 4, true, 1 ether, 1 ether);
 
         vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 3);
+        game.settleRound(0, 3);
 
         (, , uint256 jackpotWinners, , , , uint256 snapshotJackpot) = game.getRoundSummary(0);
         assertEq(jackpotWinners, 2);
@@ -773,35 +466,32 @@ contract VoltSonicTest is Test {
         vm.prank(bob);
         game.claim(0);
 
-        assertEq(voltToken.balanceOf(alice), 2.46 ether);
-        assertEq(voltToken.balanceOf(bob), 2.46 ether);
+        assertEq(alice.balance, 2.46 ether);
+        assertEq(bob.balance, 2.46 ether);
         assertEq(game.jackpotBalance(), 0.016 ether);
     }
 
     function testClaimRevertsForLosingBet() public {
-        _charge(alice, 1 ether);
-
-        vm.prank(alice);
-        game.placeBet(1, false, 1 ether, 0);
+        _placeBet(alice, 1, false, 1 ether, 0);
 
         vm.warp(block.timestamp + 3 minutes + 1);
-        uint256 requestId = game.requestRoundSettlement();
-        vrfCoordinator.fulfillRandomWords(address(game), requestId, 5);
+        game.settleRound(0, 5);
 
         vm.prank(alice);
         vm.expectRevert("No winnings to claim");
         game.claim(0);
     }
 
-    function _charge(address user, uint256 amount) internal {
-        voltToken.mint(user, amount);
+    function _placeBet(address user, uint256 diceChoice, bool parityChoice, uint256 diceAmount, uint256 parityAmount)
+        internal
+    {
+        uint256 amount = diceAmount + parityAmount;
+        vm.deal(user, amount);
         vm.prank(user);
-        voltToken.approve(address(game), amount);
+        game.placeBet{value: amount}(diceChoice, parityChoice, diceAmount, parityAmount);
     }
 
     function _seedJackpot(uint256 amount) internal {
-        voltToken.mint(address(this), amount);
-        voltToken.approve(address(game), amount);
-        game.seedJackpot(amount);
+        game.seedJackpot{value: amount}();
     }
 }

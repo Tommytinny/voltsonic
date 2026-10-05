@@ -1,9 +1,8 @@
 import { ethers } from 'ethers';
 
 // Contract details
-const CONTRACT_ADDRESS = '0xDbE80d8C7384165Ba4651A6ff6cCa19988BE0145';
-// Using Infura Base mainnet RPC
-const RPC_URL = 'https://base-mainnet.infura.io/v3/2255b582b4074dc3a7e9a76575a87efa';
+const CONTRACT_ADDRESS = '0xC1A8d14b5DBF26cBadfa88F287a6687E2bbFD1F1';
+const RPC_URL = 'https://rpc.testnet.chain.robinhood.com';
 
 // ABI (simplified for key functions)
 const VOLTSONIC_ABI = [
@@ -16,7 +15,7 @@ const VOLTSONIC_ABI = [
 
 async function main() {
   // Create provider
-  const provider = new ethers.JsonRpcProvider(RPC_URL, 8453);
+  const provider = new ethers.JsonRpcProvider(RPC_URL, 46630);
 
   // Create contract instance
   const contract = new ethers.Contract(CONTRACT_ADDRESS, VOLTSONIC_ABI, provider);

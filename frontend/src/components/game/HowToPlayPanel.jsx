@@ -10,13 +10,13 @@ const STEPS = [
   },
   {
     icon: Coins,
-    title: "Set Spending Limit In Wallet",
-    body: "Open the Wallet page and approve a VOLT spending limit first. Your bets cannot go through until the game contract has allowance to use your VOLT.",
+    title: "Fund Your Wallet",
+    body: "Keep native ETH in your wallet for the wager and network gas. Each bet transaction includes its stake as ETH value.",
   },
   {
     icon: Dice3,
     title: "Place A Dice Bet",
-    body: "Return to the dashboard, pick one dice number, enter your VOLT amount (minimum $5 USD equivalent), and confirm the bet before the round timer closes.",
+    body: "Return to the dashboard, pick a dice number, enter your ETH stake (at least the contract minimum), and confirm before the round closes.",
   },
   {
     icon: TimerReset,
@@ -56,7 +56,7 @@ export function HowToPlayPanel() {
             Wallet To Win Flow
           </h2>*/}
           <p className="mt-1 text-xs text-muted-foreground">
-            Connect, approve, bet, wait for settlement, then claim in Wallet.
+            Connect, send an ETH bet, wait for settlement, then claim your ETH winnings.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export function HowToPlayPanel() {
               </div>
 
               <div className="mt-4 rounded-xl border border-dashed border-secondary/30 bg-secondary/5 p-3 text-xs text-muted-foreground">
-                Dice betting is live now. Set your allowance in Wallet before betting, and return to Wallet again after settlement to claim any winnings.
+                Bets and payouts use native ETH. Keep enough ETH available for both the stake and network gas.
               </div>
             </div>
           </motion.div>

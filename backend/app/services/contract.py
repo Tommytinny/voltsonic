@@ -50,6 +50,23 @@ VOLTSONIC_EVENT_ABI = [
 
 VOLTSONIC_VIEW_ABI = [
     {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "_rid", "type": "uint256"},
+            {"internalType": "uint256", "name": "_randomWord", "type": "uint256"},
+        ],
+        "name": "settleRound",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+    {
         "inputs": [
             {"internalType": "address", "name": "_user", "type": "address"},
             {"internalType": "uint256", "name": "_rid", "type": "uint256"},
@@ -78,17 +95,6 @@ VOLTSONIC_VIEW_ABI = [
             {"internalType": "bool", "name": "parityResult", "type": "bool"},
             {"internalType": "bool", "name": "settled", "type": "bool"},
             {"internalType": "uint256", "name": "snapshotJackpot", "type": "uint256"},
-        ],
-        "stateMutability": "view",
-        "type": "function",
-    },
-    {
-        "inputs": [{"internalType": "uint256", "name": "_rid", "type": "uint256"}],
-        "name": "getRoundRandomnessState",
-        "outputs": [
-            {"internalType": "bool", "name": "randomnessRequested", "type": "bool"},
-            {"internalType": "bool", "name": "randomnessFulfilled", "type": "bool"},
-            {"internalType": "uint256", "name": "randomnessRequestId", "type": "uint256"},
         ],
         "stateMutability": "view",
         "type": "function",
@@ -209,13 +215,6 @@ def get_round_summary(round_id: int):
 
     return multi_w3.call(inner)
 
-
-def get_randomness_state(round_id: int):
-    def inner(w3: Web3):
-        contract = get_voltsonic_contract(w3)
-        return contract.functions.getRoundRandomnessState(round_id).call()
-
-    return multi_w3.call(inner)
 
 def get_web3():
     """

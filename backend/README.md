@@ -5,8 +5,8 @@ FastAPI + PostgreSQL backend for VoltSonic.
 ## What it gives you
 
 - a structured API layer for read-heavy frontend screens
-- PostgreSQL-backed storage for indexed rounds and bets
-- a contract indexer entrypoint so the frontend can stop relying on broad `eth_getLogs`
+- PostgreSQL-backed storage for round snapshots and user bet history
+- a scheduler that reads round state directly from the contract and saves the newest ten rounds
 
 ## Quick start
 
@@ -19,13 +19,6 @@ cp .env.example .env
 2. Start PostgreSQL:
 
 ```bash
-docker compose up -d
-```
-
-If you already started the older scaffold once, reset the local Postgres volume before first run of this indexer version so the new columns and `sync_state` table are created cleanly:
-
-```bash
-docker compose down -v
 docker compose up -d
 ```
 
@@ -58,17 +51,7 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
 `http://127.0.0.1:8000/docs`
 
-7. Trigger a bounded sync:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/api/v1/sync?max_blocks=200"
-```
-
-For the first backfill from the deployment block, you can be more explicit:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/api/v1/sync?from_block=39806939&max_blocks=200"
-```
+7. The scheduler creates and updates round rows automatically. It also reads the latest ten round summaries directly from the contract at startup and on each scheduler cycle. No block-log indexer or manual sync endpoint is used.
 
 ## Current routes
 
@@ -80,14 +63,13 @@ curl -X POST "http://127.0.0.1:8000/api/v1/sync?from_block=39806939&max_blocks=2
 - `GET /api/v1/bets/recent/open`
 - `GET /api/v1/bets/recent/closed`
 - `GET /api/v1/rounds/latest/result`
-- `POST /api/v1/sync`
+- `POST /api/v1/bets` (save a wallet-confirmed bet)
 
 ## Env you should set
 
-- `VOLTSONIC_RPC_URL`
+- `VOLTSONIC_RPC_URLS`
 - `VOLTSONIC_CONTRACT_ADDRESS`
-- `INDEXER_START_BLOCK`
-- `INDEXER_BLOCK_CHUNK_SIZE`
+- `VOLTSONIC_PRIVATE_KEY` (contract owner key used by the settlement scheduler)
 - `CORS_ORIGINS`
 
 If your frontend is hosted on Vercel, set `CORS_ORIGINS` to include your Vercel app URL, for example:
@@ -96,6 +78,4 @@ If your frontend is hosted on Vercel, set `CORS_ORIGINS` to include your Vercel 
 CORS_ORIGINS=["https://your-app.vercel.app"]
 ```
 
-The default chunk size is `10` blocks to stay compatible with tight free-tier RPC log limits.
-
-For the token-based VoltSonic flow, set `VOLTSONIC_CONTRACT_ADDRESS` to the deployed VoltSonic proxy address, not the `$VOLT` ERC-20 token address.
+Set `VOLTSONIC_CONTRACT_ADDRESS` to the deployed VoltSonic contract address. Wagers and payouts use native ETH.

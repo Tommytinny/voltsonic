@@ -34,11 +34,10 @@ export function RoundTimer({ round }) {
   //const phaseDuration = round.phase === "betting" ? 20_000 : round.phase === "locked" ? 10_000 : round.phase === "starting" ? 10_000 : 3_000;
   const phaseDuration = {
   betting: (round.phaseEndTime - (round.phaseEndTime - 20000)), // Assuming 20s betting
-  locked: 10000,
   starting: 50000,
   resolving: 5000,
   }[round.phase] || 10000;
-  const progress = Math.min(1, timeLeft / phaseDuration);
+  const progress = round.phase === "locked" ? 0 : Math.min(1, timeLeft / phaseDuration);
   const seconds = Math.ceil(timeLeft / 1000);
   const isUrgent = round.phase === "betting" && seconds <= 5;
 
@@ -56,7 +55,7 @@ export function RoundTimer({ round }) {
 
   const phaseLabels = {
     betting: "BETTING",
-    locked: "LOCKED",
+    locked: "STARTING SOON",
     starting: "GET READY",
     resolving: "RESOLVING",
     resolved: "Waiting for next round",
@@ -95,13 +94,15 @@ export function RoundTimer({ round }) {
           ) : round.phase === "resolving" ? (
             <Timer className="w-4 h-4 text-neon-green mb-0.5 animate-spin" />
           ) : null}
-          <span
-            className={`text-xl font-mono font-black ${
-              isUrgent ? "text-neon-red text-glow-red" : "text-foreground"
-            }`}
-          >
-            {seconds}
-          </span>
+          {round.phase !== "locked" ? (
+            <span
+              className={`text-xl font-mono font-black ${
+                isUrgent ? "text-neon-red text-glow-red" : "text-foreground"
+              }`}
+            >
+              {seconds}
+            </span>
+          ) : null}
         </div>
       </motion.div>
       <div className="flex items-center gap-1.5">

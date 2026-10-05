@@ -1,18 +1,22 @@
 import { ethers } from "ethers";
 
-const BASE_RPC_URLS = String(import.meta.env.VITE_BASE_RPC_URLS || "")
+const ROBINHOOD_RPC_URLS = String(
+  import.meta.env.VITE_ROBINHOOD_RPC_URLS ||
+    import.meta.env.VITE_ROBINHOOD_RPC_URL ||
+    "https://rpc.testnet.chain.robinhood.com"
+)
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-const DEFAULT_CHAIN_ID = Number(import.meta.env.VITE_BASE_CHAIN_ID || 8453);
+const DEFAULT_CHAIN_ID = Number(import.meta.env.VITE_ROBINHOOD_CHAIN_ID || 46630);
 const MAX_CONCURRENT_REQUESTS = Math.max(1, Number(import.meta.env.VITE_RPC_MAX_CONCURRENT || 4));
 const MAX_RETRIES_PER_REQUEST = Math.max(0, Number(import.meta.env.VITE_RPC_MAX_RETRIES || 2));
-const BASE_RETRY_DELAY_MS = Math.max(100, Number(import.meta.env.VITE_RPC_RETRY_DELAY_MS || 400));
+const RETRY_DELAY_MS = Math.max(100, Number(import.meta.env.VITE_RPC_RETRY_DELAY_MS || 400));
 const PROVIDER_COOLDOWN_MS = Math.max(500, Number(import.meta.env.VITE_RPC_PROVIDER_COOLDOWN_MS || 10_000));
 const CACHE_LIMIT = Math.max(10, Number(import.meta.env.VITE_RPC_CACHE_LIMIT || 300));
 
 function parseRpcUrls() {
-  const configured = BASE_RPC_URLS
+  const configured = ROBINHOOD_RPC_URLS
     .map((value) => value.trim())
     .filter(Boolean);
 
@@ -261,7 +265,7 @@ export async function runRpcRequest(executor, options = {}) {
     cacheKey = "",
     cacheTtlMs = 0,
     retries = MAX_RETRIES_PER_REQUEST,
-    retryDelayMs = BASE_RETRY_DELAY_MS,
+    retryDelayMs = RETRY_DELAY_MS,
     preferredProviderId = "",
   } = options;
 

@@ -4,7 +4,7 @@ import { ChevronRight, ChevronLeft, Fuel, Check, Lock } from "lucide-react";
 
 const STEPS = ["dice", "amount", "confirm"];
 const STEP_LABELS = ["Pick Dice", "Set Amount", "Confirm"];
-const QUICK_AMOUNTS = [0.05, 0.1, 0.25, 0.5, 1.0];
+const QUICK_AMOUNTS = [0.0004, 0.001, 0.002, 0.005, 0.01];
 
 function DiceBadge({ value, className = "" }) {
   const dotsByValue = {
@@ -57,15 +57,13 @@ function DiceBadge({ value, className = "" }) {
   );
 }
 
-const MIN_BET_USD = 5;
-
 export function QuickBetFlow({
   dicePools,
   diceTotalPool,
   getDiceMultiplier,
   onSubmit,
   disabled,
-  voltPrice,
+  minimumBet,
 }) {
   const [step, setStep] = useState("dice");
   const [dicePick, setDicePick] = useState(null);
@@ -75,8 +73,8 @@ export function QuickBetFlow({
 
   const stepIndex = STEPS.indexOf(step);
   const numAmount = parseFloat(amount) || 0;
-  const minBetVolt = voltPrice > 0 ? Number((MIN_BET_USD / voltPrice).toFixed(4)) : 0;
-  const isBelowMinimum = numAmount > 0 && minBetVolt > 0 && numAmount < minBetVolt;
+  const minBetEth = Number(minimumBet) || 0.0004;
+  const isBelowMinimum = numAmount > 0 && numAmount < minBetEth;
 
   const diceMult = dicePick !== null ? getDiceMultiplier(dicePick) : 0;
   const potentialDiceReturn = numAmount * (diceMult || 0);
@@ -142,7 +140,7 @@ export function QuickBetFlow({
         </motion.div>
         <div className="text-sm font-bold text-foreground">Bet Placed!</div>
         <div className="text-[10px] font-mono text-muted-foreground">
-          Dice #{dicePick} • {numAmount} VOLT
+          Dice #{dicePick} • {numAmount} ETH
         </div>
       </motion.div>
     );
@@ -218,12 +216,7 @@ export function QuickBetFlow({
                       {mult > 0 ? `${mult}x` : "—"}
                     </div>*/}
                     <div className="text-[9px] font-mono text-muted-foreground mt-1">
-                      {Number(dicePools?.[n] || 0).toFixed(2)} VOLT
-                      {voltPrice && (
-                        <div className="text-[8px] text-muted-foreground">
-                          ≈ ${(Number(dicePools?.[n] || 0) * voltPrice).toFixed(2)}
-                        </div>
-                      )}
+                      {Number(dicePools?.[n] || 0).toFixed(4)} ETH
                     </div>
                   </motion.button>
                 );
@@ -254,7 +247,7 @@ export function QuickBetFlow({
                       : "border-border bg-muted text-muted-foreground hover:text-foreground hover:border-primary/30"
                   }`}
                 >
-                  {a} VOLT
+                  {a} ETH
                 </motion.button>
               ))}
             </div>*/}
@@ -263,7 +256,7 @@ export function QuickBetFlow({
             <div className="relative">
               <input
                 type="number"
-                step="0.01"
+                step="0.0001"
                 min="0"
                 placeholder="Custom amount"
                 value={amount}
@@ -271,19 +264,12 @@ export function QuickBetFlow({
                 className="w-full h-12 rounded-xl border border-[hsl(230_20%_18%)] bg-[hsl(230_20%_16%)] px-4 pr-14 font-mono text-lg text-[hsl(210_40%_96%)] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">
-                VOLT
+                ETH
               </span>
             </div>
 
-            {/* USD equivalent */}
-            {numAmount > 0 && voltPrice && (
-              <div className="text-right text-xs text-muted-foreground font-mono">
-                ≈ ${(numAmount * voltPrice).toFixed(2)} USD
-              </div>
-            )}
-
             <div className={`rounded-xl border p-3 text-xs ${isBelowMinimum ? "border-amber-400 bg-amber-400/10 text-amber-400" : "border-secondary/30 bg-secondary/5 text-muted-foreground"}`}>
-              Minimum bet: ${MIN_BET_USD} USD {voltPrice ? `≈ ${minBetVolt.toFixed(4)} VOLT` : "(price unavailable)"}
+              Minimum bet: {minBetEth.toFixed(4)} ETH
             </div>
 
             {/* Return preview */}
@@ -296,12 +282,12 @@ export function QuickBetFlow({
                 <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">Dice #{dicePick} return</span>
                   <span className="font-mono font-bold text-primary">
-                    {potentialDiceReturn > 0 ? `${potentialDiceReturn.toFixed(4)} VOLT` : "—"}
+                    {potentialDiceReturn > 0 ? `${potentialDiceReturn.toFixed(6)} ETH` : "—"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 text-[10px] text-muted-foreground pt-1 border-t border-border">
                   <Fuel className="w-3 h-3" />
-                  <span>Requires a single contract transaction plus any needed approval.</span>
+                  <span>Requires one contract transaction with the ETH stake.</span>
                 </div>
               </motion.div>
             )}
@@ -342,11 +328,11 @@ export function QuickBetFlow({
                     <div className="text-[10px] font-mono text-primary">{diceMult}x multiplier</div>
                   </div>
                 </div>
-                <div className="text-sm font-mono font-bold text-foreground">{numAmount} VOLT</div>
+                <div className="text-sm font-mono font-bold text-foreground">{numAmount} ETH</div>
               </div>
               <div className="border-t border-border pt-2 flex justify-between text-xs">
                 <span className="text-muted-foreground">Total stake</span>
-                <span className="font-mono font-bold text-foreground">{numAmount.toFixed(4)} VOLT</span>
+                <span className="font-mono font-bold text-foreground">{numAmount.toFixed(4)} ETH</span>
               </div>
             </div>
 
@@ -366,7 +352,7 @@ export function QuickBetFlow({
               className="w-full py-4 rounded-xl font-black text-sm tracking-widest bg-primary text-primary-foreground transition-all"
               style={{ boxShadow: "var(--glow-cyan)" }}
             >
-              {submitting ? "WAITING FOR APPROVAL..." : `PLACE DICE BET - ${numAmount.toFixed(5)} VOLT`}
+              {submitting ? "CONFIRMING BET..." : `PLACE DICE BET - ${numAmount.toFixed(5)} ETH`}
             </motion.button>
           </motion.div>
         )}

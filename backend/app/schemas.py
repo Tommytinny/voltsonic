@@ -35,23 +35,6 @@ class RoundRead(BaseModel):
         return format(value, "f")
 
 
-class RoundWrite(BaseModel):
-    round_id: int
-    settled: bool = True
-    randomness_requested: bool | None = None
-    randomness_fulfilled: bool | None = None
-    dice_result: int | None = None
-    parity_result: bool | None = None
-    total_dice_pool: Decimal | int | str = 0
-    total_parity_pool: Decimal | int | str = 0
-    snapshot_jackpot: Decimal | int | str = 0
-    total_jackpot_winners: int = 0
-    started_at: datetime | None = None
-    closed_at: datetime | None = None
-    settled_tx_hash: str | None = None
-    settlement_block_number: int | None = None
-
-
 class BetRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -78,9 +61,14 @@ class BetRead(BaseModel):
         return format(value, "f")
 
 
-class SyncResponse(BaseModel):
-    synced_from_block: int
-    synced_to_block: int
-    rounds_indexed: int
-    bets_indexed: int
-    claims_indexed: int
+class BetWrite(BaseModel):
+    round_id: int
+    user_address: str
+    tx_hash: str
+    dice_choice: int | None = None
+    parity_choice: bool | None = None
+    dice_amount: Decimal = 0
+    parity_amount: Decimal = 0
+    bet_on_dice: bool = False
+    bet_on_parity: bool = False
+    block_number: int | None = None

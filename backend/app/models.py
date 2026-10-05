@@ -28,8 +28,6 @@ class Round(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-
-
 class Bet(Base):
     __tablename__ = "bets"
 
@@ -49,17 +47,6 @@ class Bet(Base):
     block_number: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     won: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-
-class SyncState(Base):
-    __tablename__ = "sync_state"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    key: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    last_synced_block: Mapped[int] = mapped_column(BigInteger, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

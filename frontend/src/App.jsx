@@ -6,6 +6,8 @@ import Wallet from "./pages/Wallet.jsx";
 import Countdown from "./pages/Countdown.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import Test from "./pages/testing.jsx";
+import { WagmiProvider } from "wagmi";
+import { wagmiConfig } from "@/lib/wallet";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,22 +34,21 @@ const App = () => {
   const launchLive = isLaunchLive();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-              <Route path="/" element={<Game />} />
-              <Route path="/game" element={<Game />} />
-              <Route path="/wallet" element={<Wallet />} />
-              <Route path="/test" element={<Test />} />
-            
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Game />} />
+            <Route path="/game" element={<Game />} />
+            <Route path="/wallet" element={<Wallet />} />
+            <Route path="/test" element={<Test />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 };
-
 
 export default App;

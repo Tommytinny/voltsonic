@@ -7,16 +7,16 @@ import {VoltSonic} from "../src/voltsonic.sol";
 contract TransferOwnership is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address payable proxyAddress = payable(vm.envAddress("VOLTSONIC_PROXY_ADDRESS"));
+        address payable contractAddress = payable(vm.envAddress("VOLTSONIC_CONTRACT_ADDRESS"));
         address newOwner = vm.envAddress("OWNER_ADDRESS");
 
         vm.startBroadcast(deployerPrivateKey);
 
-        VoltSonic(proxyAddress).transferOwnership(newOwner);
+        VoltSonic(contractAddress).transferOwnership(newOwner);
 
         vm.stopBroadcast();
 
-        console2.log("Started ownership transfer for proxy:", proxyAddress);
+        console2.log("Started ownership transfer for contract:", contractAddress);
         console2.log("Pending owner:", newOwner);
     }
 }

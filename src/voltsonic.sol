@@ -1,58 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./utils/UpgradeableUtils.sol";
-
-library VRFV2PlusClientLite {
-    bytes4 internal constant EXTRA_ARGS_V1_TAG = bytes4(keccak256("VRF ExtraArgsV1"));
-
-    struct ExtraArgsV1 {
-        bool nativePayment;
-    }
-
-    struct RandomWordsRequest {
-        bytes32 keyHash;
-        uint256 subId;
-        uint16 requestConfirmations;
-        uint32 callbackGasLimit;
-        uint32 numWords;
-        bytes extraArgs;
-    }
-
-    function argsToBytes(ExtraArgsV1 memory extraArgs) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(EXTRA_ARGS_V1_TAG, extraArgs);
-    }
-}
-
-interface IVRFCoordinatorV2Plus {
-    function requestRandomWords(
-        VRFV2PlusClientLite.RandomWordsRequest calldata req
-    ) external returns (uint256 requestId);
-}
-
-interface AutomationCompatibleInterface {
-    function checkUpkeep(bytes calldata checkData)
-        external
-        returns (bool upkeepNeeded, bytes memory performData);
-
-    function performUpkeep(bytes calldata performData) external;
-}
-
-interface IERC20Lite {
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address to, uint256 amount) external returns (bool);
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-}
-
-contract VoltSonic is
-    Initializable,
-    OwnableUpgradeable,
-    UUPSUpgradeable,
-    ReentrancyGuardUpgradeable,
-    AutomationCompatibleInterface
-{
+contract VoltSonic {
     
     // --- State Variables ---
     uint256 public currentRid;
@@ -62,12 +11,29 @@ contract VoltSonic is
     uint256 public minBet; 
     uint256 public roundDuration;
     uint256 public intermissionDuration;
-    uint256 public totalEthContributed; // Legacy name; tracks total VOLT inflow into the contract.
+    uint256 public totalEthContributed;
     uint256 public totalHouseFeesCollected;
     address public houseFeeRecipient;
     bool public bettingOpen;
-    uint256 public totalVaultDeposits;
-    IERC20Lite public voltToken;
+    uint256 public totalEthEscrowed;
+    address private _owner;
+    address private _pendingOwner;
+    uint256 private _reentrancyStatus;
+
+    uint256 private constant _NOT_ENTERED = 1;
+    uint256 private constant _ENTERED = 2;
+
+    modifier onlyOwner() {
+        require(msg.sender == _owner, "Ownable: caller is not the owner");
+        _;
+    }
+
+    modifier nonReentrant() {
+        require(_reentrancyStatus != _ENTERED, "ReentrancyGuard: reentrant call");
+        _reentrancyStatus = _ENTERED;
+        _;
+        _reentrancyStatus = _NOT_ENTERED;
+    }
 
     struct Bet {
         uint256 diceChoice; 
@@ -113,24 +79,14 @@ contract VoltSonic is
     event JackpotRollover(uint256 indexed roundId, uint256 amountAdded);
     event BettingStatusUpdated(bool isOpen);
     event HouseFeeRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
-    event VoltTokenUpdated(address indexed previousToken, address indexed newToken);
+    constructor(address initialOwner) {
+        require(initialOwner != address(0), "Ownable: zero owner");
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(address initialOwner, address voltTokenAddress) public initializer {
-        require(voltTokenAddress != address(0), "Token required");
-
-        __Ownable_init(initialOwner);
-        __UUPSUpgradeable_init();
-        __ReentrancyGuard_init();
-
-        voltToken = IERC20Lite(voltTokenAddress);
+        _owner = initialOwner;
+        _reentrancyStatus = _NOT_ENTERED;
         houseFeePercent = 2;
         jackpotSeedPercent = 20;
-        minBet = 0.0004 ether; // 0.0004 VOLT with 18 decimals
+        minBet = 0.0004 ether;
         houseFeeRecipient = initialOwner;
         roundDuration = 3 minutes;
         intermissionDuration = 1 minutes;
@@ -138,7 +94,30 @@ contract VoltSonic is
         _initializeRound(currentRid, true);
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+    function owner() public view returns (address) {
+        return _owner;
+    }
+
+    function pendingOwner() public view returns (address) {
+        return _pendingOwner;
+    }
+
+    function transferOwnership(address newOwner) public onlyOwner {
+        require(newOwner != address(0), "Ownable: zero owner");
+        _pendingOwner = newOwner;
+        emit OwnershipTransferStarted(_owner, newOwner);
+    }
+
+    function acceptOwnership() public {
+        require(msg.sender == _pendingOwner, "Ownable: caller is not the pending owner");
+        address previousOwner = _owner;
+        _owner = _pendingOwner;
+        _pendingOwner = address(0);
+        emit OwnershipTransferred(previousOwner, _owner);
+    }
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
 
     function _initializeRound(uint256 _rid) internal {
         _initializeRound(_rid, false);
@@ -156,11 +135,6 @@ contract VoltSonic is
     function _isRoundBettingOpen(uint256 _rid) internal view returns (bool) {
         Round storage round = rounds[_rid];
         return bettingOpen && !round.settled && block.timestamp >= round.startTime && block.timestamp < round.closeTime;
-    }
-
-    function _canRequestSettlement(uint256 _rid) internal view returns (bool) {
-        Round storage round = rounds[_rid];
-        return block.timestamp >= round.closeTime && !round.settled;
     }
 
     function _advanceToNextRound(uint256 _rid) internal {
@@ -201,27 +175,22 @@ contract VoltSonic is
         _advanceToNextRound(_rid);
     }
 
-    // --- Token Helpers ---
-
-    function _pullVolt(address from, uint256 amount) internal {
-        require(voltToken.transferFrom(from, address(this), amount), "VOLT transferFrom failed");
-        totalVaultDeposits += amount;
-        totalEthContributed += amount;
-    }
-
-    function _pushVolt(address to, uint256 amount) internal {
-        require(voltToken.transfer(to, amount), "VOLT transfer failed");
-        totalVaultDeposits -= amount;
+    function _pushEth(address to, uint256 amount) internal {
+        if (amount == 0) return;
+        totalEthEscrowed -= amount;
+        (bool success, ) = to.call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 
     // --- Game Logic ---
 
-    function placeBet(uint256 _diceNum, bool _isEven, uint256 _diceAmount, uint256 _parityAmount) external {
+    function placeBet(uint256 _diceNum, bool _isEven, uint256 _diceAmount, uint256 _parityAmount) external payable {
         _initializeRound(currentRid);
         require(_isRoundBettingOpen(currentRid), "Betting is closed");
         require(_diceAmount > 0 || _parityAmount > 0, "Select a game mode");
 
         uint256 totalBetAmount = _diceAmount + _parityAmount;
+        require(msg.value == totalBetAmount, "Incorrect ETH value");
         require(totalBetAmount >= minBet, "Bet below minimum");
         if (_diceAmount > 0) require(_diceAmount >= minBet, "Dice bet below minimum");
         if (_parityAmount > 0) require(_parityAmount >= minBet, "Parity bet below minimum");
@@ -230,7 +199,8 @@ contract VoltSonic is
         Bet storage bet = userBets[msg.sender][currentRid];
         require(!bet.betOnDice && !bet.betOnParity, "Bet already placed for round");
 
-        _pullVolt(msg.sender, totalBetAmount);
+        totalEthContributed += msg.value;
+        totalEthEscrowed += msg.value;
 
         if (_diceAmount > 0) {
             require(_diceNum >= 1 && _diceNum <= 6, "Invalid Dice");
@@ -266,34 +236,6 @@ contract VoltSonic is
 
         uint256 finalDice = (_randomWord % 6) + 1;
         _settleRoundWithDice(_rid, finalDice);
-    }
-
-    function checkUpkeep(bytes calldata)
-        external
-        view
-        override
-        returns (bool upkeepNeeded, bytes memory performData)
-    {
-        upkeepNeeded = _canRequestSettlement(currentRid);
-        performData = abi.encode(currentRid);
-    }
-
-    function performUpkeep(bytes calldata performData) external override {
-        uint256 roundId = currentRid;
-        if (performData.length > 0) {
-            roundId = abi.decode(performData, (uint256));
-        }
-
-        if (roundId != currentRid) {
-            return;
-        }
-
-        if (!_canRequestSettlement(roundId)) {
-            return;
-        }
-
-        // Backend will call settleRound with randomness
-        // This is just a notification that settlement is needed
     }
 
     function claim(uint256 _rid) external nonReentrant {
@@ -332,10 +274,8 @@ contract VoltSonic is
 
         emit WinningsCredited(msg.sender, _rid, netWinnings);
 
-        _pushVolt(msg.sender, netWinnings);
-        if (ownerFee > 0) {
-            _pushVolt(feeRecipient, ownerFee);
-        }
+        _pushEth(msg.sender, netWinnings);
+        _pushEth(feeRecipient, ownerFee);
     }
 
     // --- View Helpers ---
@@ -494,10 +434,11 @@ contract VoltSonic is
     function setIntermissionDuration(uint256 _newDuration) external onlyOwner {
         intermissionDuration = _newDuration;
     }
-    function seedJackpot(uint256 amount) external onlyOwner {
-        require(amount > 0, "Amount required");
-        _pullVolt(msg.sender, amount);
-        jackpotBalance += amount;
+    function seedJackpot() external payable onlyOwner {
+        require(msg.value > 0, "Amount required");
+        totalEthContributed += msg.value;
+        totalEthEscrowed += msg.value;
+        jackpotBalance += msg.value;
     }
     function setBettingOpen(bool _isOpen) external onlyOwner {
         bettingOpen = _isOpen;
@@ -508,12 +449,6 @@ contract VoltSonic is
         address previousRecipient = houseFeeRecipient;
         houseFeeRecipient = _recipient;
         emit HouseFeeRecipientUpdated(previousRecipient, _recipient);
-    }
-    function setVoltToken(address _token) external onlyOwner {
-        require(_token != address(0), "Token required");
-        address previousToken = address(voltToken);
-        voltToken = IERC20Lite(_token);
-        emit VoltTokenUpdated(previousToken, _token);
     }
     function forceSettleEmptyRound(uint256 _rid) external onlyOwner {
         Round storage round = rounds[_rid];
@@ -537,5 +472,8 @@ contract VoltSonic is
         _advanceToNextRound(_rid);
     }
 
-    receive() external payable {}
+    receive() external payable {
+        totalEthContributed += msg.value;
+        totalEthEscrowed += msg.value;
+    }
 }

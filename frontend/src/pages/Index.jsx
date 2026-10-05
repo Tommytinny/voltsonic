@@ -1,67 +1,20 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
-import { VOLTSONIC_ABI, VOLT_ERC20_ABI, formatEth, formatVolt, getExplorerRoundCards } from "@/lib/contract";
+import { decodeEventLog } from "viem";
+import { useAccount, useConnect, useDisconnect, usePublicClient, useSwitchChain, useWriteContract } from "wagmi";
+import { VOLTSONIC_ABI, VOLTSONIC_VIEM_ABI, formatEth, mapRoundRecordToCard } from "@/lib/contract";
 import { getPrimaryRpcUrl, hasRpcEndpoints, readContract, readContractsDistributed, runRpcRequest } from "@/lib/rpc";
+import { SHOW_BACKEND_TOASTS } from "@/lib/featureFlags";
 import { RoundTimer } from "@/components/game/RoundTimer";
 import { Zap, Wallet, Users } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
-const CHAINLINK_ETH_USD_FEED = import.meta.env.VITE_CHAINLINK_ETH_USD_FEED_ADDRESS || "";
+const ROBINHOOD_CHAIN_ID = Number(import.meta.env.VITE_ROBINHOOD_CHAIN_ID || 46630);
+const ROBINHOOD_RPC_URL = import.meta.env.VITE_ROBINHOOD_RPC_URL || "https://rpc.testnet.chain.robinhood.com";
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
 const ROUND_DURATION_SECONDS = Number(import.meta.env.VITE_VOLTSONIC_ROUND_DURATION_SECONDS || 180);
-const VOLT_USD_PRICE = Number(import.meta.env.VITE_VOLT_USD_PRICE || 0);
-const DEXSCREENER_CHAIN_ID = import.meta.env.VITE_DEXSCREENER_CHAIN_ID || "base";
-const CHAINLINK_FEED_ABI = [
-  {
-    inputs: [],
-    name: "decimals",
-    outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "description",
-    outputs: [{ internalType: "string", name: "", type: "string" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "uint80", name: "_roundId", type: "uint80" }],
-    name: "getRoundData",
-    outputs: [
-      { internalType: "uint80", name: "roundId", type: "uint80" },
-      { internalType: "int256", name: "answer", type: "int256" },
-      { internalType: "uint256", name: "startedAt", type: "uint256" },
-      { internalType: "uint256", name: "updatedAt", type: "uint256" },
-      { internalType: "uint80", name: "answeredInRound", type: "uint80" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "latestRoundData",
-    outputs: [
-      { internalType: "uint80", name: "roundId", type: "uint80" },
-      { internalType: "int256", name: "answer", type: "int256" },
-      { internalType: "uint256", name: "startedAt", type: "uint256" },
-      { internalType: "uint256", name: "updatedAt", type: "uint256" },
-      { internalType: "uint80", name: "answeredInRound", type: "uint80" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "version",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-];
 
 export function shortAddress(value) {
   return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "Not connected";
@@ -123,60 +76,10 @@ function formatUsdToEthPreview(usdValue, ethUsdPrice) {
   return `${converted.toFixed(6)} ETH`;
 }
 
-function convertUsdToVoltAmount(usdValue, voltUsdPrice) {
-  const usd = Number(usdValue || 0);
-  const price = Number(voltUsdPrice || 0);
-  if (!Number.isFinite(usd) || usd <= 0 || !Number.isFinite(price) || price <= 0) {
-    return "";
-  }
-
-  return (usd / price).toFixed(4);
-}
-
-function convertVoltToUsdAmount(voltValue, voltUsdPrice) {
-  const volt = Number(voltValue || 0);
-  const price = Number(voltUsdPrice || 0);
-  if (!Number.isFinite(volt) || volt <= 0 || !Number.isFinite(price) || price <= 0) {
-    return "";
-  }
-
-  return (volt * price).toFixed(2);
-}
-
-async function fetchDexScreenerTokenPriceUsd(tokenAddress) {
-  if (!tokenAddress || !ethers.isAddress(tokenAddress)) {
-    return null;
-  }
-
-  tokenAddress = import.meta.env.VITE_TOKEN_ADDRESS || tokenAddress;
-
-  const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`);
-  if (!response.ok) {
-    console.error("Dexscreener price request failed:", { status: response.status, statusText: response.statusText });
-    throw new Error(`Dexscreener price request failed: ${response.status}`);
-    
-  }
-
-  const data = await response.json();
-  if (!data || !data.pairs || !Array.isArray(data.pairs) || data.pairs.length === 0) {
-    return null;
-  }
-
-  // Find the pair with the highest liquidity
-  const bestPair = data.pairs.sort((a, b) => {
-    const aLiquidity = Number(a.liquidity?.usd || 0);
-    const bLiquidity = Number(b.liquidity?.usd || 0);
-    return bLiquidity - aLiquidity;
-  })[0];
-
-  const priceUsd = Number(bestPair?.priceUsd || 0);
-  return Number.isFinite(priceUsd) && priceUsd > 0 ? priceUsd : null;
-}
-
 function formatTokenInputPreview(value) {
   const normalized = Number(value || 0);
-  if (!Number.isFinite(normalized) || normalized <= 0) return "0.0000 $VOLT";
-  return `${normalized.toFixed(4)} $VOLT`;
+    if (!Number.isFinite(normalized) || normalized <= 0) return "0.0000 ETH";
+  return `${normalized.toFixed(4)} ETH`;
 }
 
 function DiceIcon({ number, selected = false }) {
@@ -507,19 +410,19 @@ function buildDefaultRoundPoolCards(selectedDice = 2, parityEven = true) {
     ...Array.from({ length: 6 }, (_, index) => ({
       title: `Dice ${index + 1}`,
       bettors: 0,
-      amount: "0.0000 $VOLT",
+      amount: "0.0000 ETH",
       accent: selectedDice === index + 1,
     })),
     {
       title: "Even Pool",
       bettors: 0,
-      amount: "0.0000 $VOLT",
+      amount: "0.0000 ETH",
       accent: parityEven,
     },
     {
       title: "Odd Pool",
       bettors: 0,
-      amount: "0.0000 $VOLT",
+      amount: "0.0000 ETH",
       accent: !parityEven,
     },
   ];
@@ -601,8 +504,6 @@ function createInitialSnapshot(selectedDice = 2, parityEven = true) {
     claimJackpotReward: "",
     claimFee: "",
     claimNet: "",
-    tokenAddress: "",
-    tokenAllowance: "",
     latestSettledRound: "",
     latestResultDice: "",
     latestResultParity: "",
@@ -615,7 +516,12 @@ function createInitialSnapshot(selectedDice = 2, parityEven = true) {
 }
 
 export function useVoltSonic() {
-  const [account, setAccount] = useState("");
+  const { address: account = "", chainId, isConnected, connector: activeConnector } = useAccount();
+  const { connectAsync, connectors } = useConnect();
+  const { disconnectAsync } = useDisconnect();
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: ROBINHOOD_CHAIN_ID });
   const [contract, setContract] = useState(null);
   const [networkName, setNetworkName] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -624,12 +530,8 @@ export function useVoltSonic() {
   const [backendStatus, setBackendStatus] = useState("unknown");
   const [roundCountdown, setRoundCountdown] = useState(formatCountdown(ROUND_DURATION_SECONDS));
   const [roundCountdownLabel, setRoundCountdownLabel] = useState("Closes in");
-  const [ethUsdPrice, setEthUsdPrice] = useState(null);
-  const [ethUsdStatus, setEthUsdStatus] = useState(
-    !CHAINLINK_ETH_USD_FEED || !ethers.isAddress(CHAINLINK_ETH_USD_FEED) || !hasRpcEndpoints() ? "missing_config" : "loading"
-  );
-  const [voltPrice, setVoltPrice] = useState(null);
-  const [voltPriceStatus, setVoltPriceStatus] = useState("loading");
+  const ethUsdPrice = null;
+  const ethUsdStatus = "unavailable";
   const [betForm, setBetForm] = useState({
     dice: 2,
     parityEven: true,
@@ -642,16 +544,15 @@ export function useVoltSonic() {
     houseFeeRecipient: "",
   });
   const [betHistory, setBetHistory] = useState([]);
+  const [backendRoundRecords, setBackendRoundRecords] = useState([]);
   const [snapshot, setSnapshot] = useState(() => createInitialSnapshot());
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [betHistoryLoading, setBetHistoryLoading] = useState(false);
   const [backendRefreshTick, setBackendRefreshTick] = useState(0);
   const [snapshotRefreshTick, setSnapshotRefreshTick] = useState(0);
-  const [priceRefreshTick, setPriceRefreshTick] = useState(0);
+  const [betHistoryRefreshTick, setBetHistoryRefreshTick] = useState(0);
 
-  const roundFeed = useMemo(() => (
-    snapshot.currentRound ? getExplorerRoundCards(snapshot.currentRound) : []
-  ), [snapshot.currentRound]);
+  const roundFeed = useMemo(() => backendRoundRecords.map(mapRoundRecordToCard), [backendRoundRecords]);
   const toastIdRef = useRef(0);
   const prevSnapshotRef = useRef(null);
   const prevAccountRef = useRef("");
@@ -662,7 +563,27 @@ export function useVoltSonic() {
   const hasSeenInitialBackendStatusRef = useRef(false);
   const hasSeenInitialAccountRef = useRef(false);
   const resultModalTimeoutRef = useRef(null);
-  const tokenAddressRef = useRef("");
+
+  useEffect(() => {
+    if (backendStatus !== "ready") return undefined;
+
+    let cancelled = false;
+    const loadRecentRounds = async () => {
+      try {
+        const rounds = await fetchBackendJson("/api/v1/rounds?limit=10");
+        if (!cancelled) setBackendRoundRecords(rounds);
+      } catch (error) {
+        console.warn("Could not load recent rounds from backend:", error);
+      }
+    };
+
+    loadRecentRounds();
+    const intervalId = window.setInterval(loadRecentRounds, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [backendStatus, snapshot.currentRound]);
 
   function dismissToast(id) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
@@ -724,51 +645,23 @@ export function useVoltSonic() {
     setSnapshotRefreshTick((current) => current + 1);
   }
 
-  function refreshPriceFeed() {
-    setPriceRefreshTick((current) => current + 1);
-  }
-
   useEffect(() => {
     if (!CONTRACT_ADDRESS || !ethers.isAddress(CONTRACT_ADDRESS)) return;
 
     const nextProvider = hasRpcEndpoints()
       ? new ethers.JsonRpcProvider(getPrimaryRpcUrl())
-      : window.ethereum
-        ? new ethers.BrowserProvider(window.ethereum)
-        : null;
+      : null;
 
     if (!nextProvider) return;
 
     const nextContract = new ethers.Contract(CONTRACT_ADDRESS, VOLTSONIC_ABI, nextProvider);
     setContract(nextContract);
 
-    runRpcRequest((provider) => provider.getNetwork(), {
-      cacheKey: "rpc:network",
-      cacheTtlMs: 5 * 60 * 1000,
-    }).then((network) => setNetworkName(network.name)).catch(() => {});
-
-    if (window.ethereum) {
-      const walletProvider = new ethers.BrowserProvider(window.ethereum);
-      walletProvider.send("eth_accounts", []).then((accounts) => {
-        if (accounts[0]) setAccount(accounts[0]);
-      }).catch(() => {});
-    }
   }, []);
 
   useEffect(() => {
-    if (!window.ethereum) return;
-
-    const handleAccountsChanged = (accounts) => setAccount(accounts[0] || "");
-    const handleChainChanged = () => window.location.reload();
-
-    window.ethereum.on("accountsChanged", handleAccountsChanged);
-    window.ethereum.on("chainChanged", handleChainChanged);
-
-    return () => {
-      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      window.ethereum.removeListener("chainChanged", handleChainChanged);
-    };
-  }, []);
+    setNetworkName(!chainId ? "" : chainId === ROBINHOOD_CHAIN_ID ? "Robinhood Chain Testnet" : "Wrong network");
+  }, [chainId]);
 
   useEffect(() => {
     if (!statusMessage) return;
@@ -788,14 +681,14 @@ export function useVoltSonic() {
         prevBackendStatusRef.current = backendStatus;
         return;
       }
-      if (backendStatus === "ready") {
+      if (SHOW_BACKEND_TOASTS && backendStatus === "ready") {
         pushToast({
           type: "success",
           title: "Backend Connected",
           message: "Read-heavy views are now using backend data.",
           dedupeKey: "backend-ready",
         });
-      } else if (backendStatus === "offline") {
+      } else if (SHOW_BACKEND_TOASTS && backendStatus === "offline") {
         pushToast({
           type: "warning",
           title: "Backend Offline",
@@ -818,12 +711,14 @@ export function useVoltSonic() {
       } catch (error) {
         if (!cancelled) {
           setBackendStatus("offline");
-          notify(
-            formatDebugError("Backend health check failed", error),
-            "warning",
-            "Backend Error",
-            "backend-health-check-failed"
-          );
+          if (SHOW_BACKEND_TOASTS) {
+            notify(
+              formatDebugError("Backend health check failed", error),
+              "warning",
+              "Backend Error",
+              "backend-health-check-failed"
+            );
+          }
         }
       }
     }
@@ -850,19 +745,17 @@ export function useVoltSonic() {
       try {
         let currentState = { roundId: 0, isBettingOpen: false, totalDicePool: 0n, totalParityPool: 0n, currentJackpot: 0n, minimumBet: 0n, startTime: 0, closeTime: 0 };
         let currentPoolStats = { dicePoolAmounts: [0n, 0n, 0n, 0n, 0n, 0n], dicePoolBettors: [0, 0, 0, 0, 0, 0], evenPoolAmount: 0n, oddPoolAmount: 0n, evenPoolBettors: 0, oddPoolBettors: 0 };
-        let totalVaultDeposits = 0n;
+        let totalEthEscrowed = 0n;
         let totalEthContributed = 0n;
         let owner = ethers.ZeroAddress;
-        let tokenAddress = tokenAddressRef.current || ethers.ZeroAddress;
 
         try {
           const [
             fetchedCurrentState,
             fetchedCurrentPoolStats,
-            fetchedTotalVaultDeposits,
+            fetchedTotalEthEscrowed,
             fetchedTotalEthContributed,
             fetchedOwner,
-            fetchedTokenAddress,
           ] = await readContractsDistributed([
             {
               address: CONTRACT_ADDRESS,
@@ -881,8 +774,8 @@ export function useVoltSonic() {
             {
               address: CONTRACT_ADDRESS,
               abi: VOLTSONIC_ABI,
-              method: "totalVaultDeposits",
-              cacheKey: "voltsonic:totalVaultDeposits",
+              method: "totalEthEscrowed",
+              cacheKey: "voltsonic:totalEthEscrowed",
               cacheTtlMs: 8_000,
             },
             {
@@ -899,73 +792,32 @@ export function useVoltSonic() {
               cacheKey: "voltsonic:owner",
               cacheTtlMs: 5 * 60 * 1000,
             },
-            {
-              address: CONTRACT_ADDRESS,
-              abi: VOLTSONIC_ABI,
-              method: "voltToken",
-              cacheKey: "voltsonic:voltToken",
-              cacheTtlMs: 5 * 60 * 1000,
-            },
           ]);
 
           currentState = fetchedCurrentState;
           currentPoolStats = fetchedCurrentPoolStats;
-          totalVaultDeposits = fetchedTotalVaultDeposits;
+          totalEthEscrowed = fetchedTotalEthEscrowed;
           totalEthContributed = fetchedTotalEthContributed;
           owner = fetchedOwner;
-          const previousTokenAddress = tokenAddressRef.current;
-          tokenAddress = fetchedTokenAddress;
-          tokenAddressRef.current = tokenAddress;
-          if (
-            previousTokenAddress !== tokenAddress &&
-            ethers.isAddress(tokenAddress) &&
-            tokenAddress !== ethers.ZeroAddress
-          ) {
-            refreshPriceFeed();
-          }
         } catch (error) {
           console.error("Failed to load distributed contract snapshot:", error);
           notify("Could not load contract snapshot from the RPC pool.", "error", "Contract Error", "distributed-snapshot-failed");
         }
 
-        const hasTokenAddress = ethers.isAddress(tokenAddress) && tokenAddress !== ethers.ZeroAddress;
-
         const currentRoundNumber = Number(currentState.roundId);
         const latestSettledRoundId = currentRoundNumber > 0 ? currentRoundNumber - 1 : null;
-        let connectedCredits = 0n;
-        let contractTokenBalance = 0n;
-        let tokenAllowance = 0n;
-
-        if (account && hasTokenAddress) {
-          connectedCredits = await readContract({
-            address: tokenAddress,
-            abi: VOLT_ERC20_ABI,
-            method: "balanceOf",
-            args: [account],
-            cacheKey: `volt:${tokenAddress.toLowerCase()}:balanceOf:${account.toLowerCase()}`,
-            cacheTtlMs: 5_000,
-          }).catch(() => 0n);
-        }
-        if (hasTokenAddress) {
-          contractTokenBalance = await readContract({
-            address: tokenAddress,
-            abi: VOLT_ERC20_ABI,
-            method: "balanceOf",
-            args: [CONTRACT_ADDRESS],
-            cacheKey: `volt:${tokenAddress.toLowerCase()}:balanceOf:${CONTRACT_ADDRESS.toLowerCase()}`,
-            cacheTtlMs: 5_000,
-          }).catch(() => 0n);
-        }
-        if (account && hasTokenAddress) {
-          tokenAllowance = await readContract({
-            address: tokenAddress,
-            abi: VOLT_ERC20_ABI,
-            method: "allowance",
-            args: [account, CONTRACT_ADDRESS],
-            cacheKey: `volt:${tokenAddress.toLowerCase()}:allowance:${account.toLowerCase()}:${CONTRACT_ADDRESS.toLowerCase()}`,
-            cacheTtlMs: 5_000,
-          }).catch(() => 0n);
-        }
+        const [connectedCredits, contractEthBalance] = await Promise.all([
+          account
+            ? runRpcRequest((rpcProvider) => rpcProvider.getBalance(account), {
+                cacheKey: `eth:balance:${account.toLowerCase()}`,
+                cacheTtlMs: 3_000,
+              }).catch(() => 0n)
+            : Promise.resolve(0n),
+          runRpcRequest((rpcProvider) => rpcProvider.getBalance(CONTRACT_ADDRESS), {
+            cacheKey: `eth:balance:${CONTRACT_ADDRESS.toLowerCase()}`,
+            cacheTtlMs: 3_000,
+          }).catch(() => 0n),
+        ]);
 
         let preview = [0n, 0n, 0n, 0n, false];
         let latestRoundSummary = null;
@@ -979,20 +831,7 @@ export function useVoltSonic() {
             cacheTtlMs: 5_000,
           }).catch(() => [0n, 0n, 0n, 0n, false]);
         }
-        if (latestSettledRoundId !== null && backendStatus === "ready") {
-          try {
-            latestRoundSummary = await fetchBackendJson("/api/v1/rounds/latest/result");
-          } catch (error) {
-            notify(
-              formatDebugError("Latest round backend fetch failed", error),
-              "warning",
-              "Backend Fallback",
-              "latest-round-backend-fetch-failed"
-            );
-            latestRoundSummary = null;
-          }
-        }
-        if (latestSettledRoundId !== null && !latestRoundSummary) {
+        if (latestSettledRoundId !== null) {
           try {
             latestRoundSummary = await readContract({
               address: CONTRACT_ADDRESS,
@@ -1019,18 +858,16 @@ export function useVoltSonic() {
         setSnapshot({
           currentRound: `#${currentRoundNumber}`,
           bettingOpen: currentState.isBettingOpen,
-          jackpotBalance: formatVolt(currentState.currentJackpot),
+          jackpotBalance: formatEth(currentState.currentJackpot),
           minBet: ethers.formatEther(currentState.minimumBet),
-          credits: formatVolt(connectedCredits),
-          contractBalance: formatVolt(contractTokenBalance),
-          redeemableCredits: formatVolt(totalVaultDeposits),
-          totalEthContributed: formatVolt(totalEthContributed),
-          claimPoolReward: formatVolt(preview[0]),
-          claimJackpotReward: formatVolt(preview[1]),
-          claimFee: formatVolt(preview[2]),
-          claimNet: formatVolt(preview[3]),
-          tokenAddress,
-          tokenAllowance: formatVolt(tokenAllowance),
+          credits: formatEth(connectedCredits),
+          contractBalance: formatEth(contractEthBalance),
+          redeemableCredits: formatEth(totalEthEscrowed),
+          totalEthContributed: formatEth(totalEthContributed),
+          claimPoolReward: formatEth(preview[0]),
+          claimJackpotReward: formatEth(preview[1]),
+          claimFee: formatEth(preview[2]),
+          claimNet: formatEth(preview[3]),
           latestSettledRound: latestRoundSummary
             ? `#${Number(latestRoundSummary.round_id ?? latestSettledRoundId)}`
             : latestSettledRoundId === null
@@ -1055,19 +892,19 @@ export function useVoltSonic() {
             ...Array.from({ length: 6 }, (_, index) => ({
               title: `Dice ${index + 1}`,
               bettors: Number(currentPoolStats.dicePoolBettors[index]),
-              amount: formatVolt(currentPoolStats.dicePoolAmounts[index]),
+              amount: formatEth(currentPoolStats.dicePoolAmounts[index]),
               accent: betForm.dice === index + 1,
             })),
             {
               title: "Even Pool",
               bettors: Number(currentPoolStats.evenPoolBettors),
-              amount: formatVolt(currentPoolStats.evenPoolAmount),
+              amount: formatEth(currentPoolStats.evenPoolAmount),
               accent: betForm.parityEven,
             },
             {
               title: "Odd Pool",
               bettors: Number(currentPoolStats.oddPoolBettors),
-              amount: formatVolt(currentPoolStats.oddPoolAmount),
+              amount: formatEth(currentPoolStats.oddPoolAmount),
               accent: !betForm.parityEven,
             },
           ],
@@ -1095,34 +932,12 @@ export function useVoltSonic() {
   useEffect(() => {
     if (!snapshot.roundStartTime && !snapshot.roundCloseTime) return;
 
-    const nowMs = Date.now();
-    const roundStartMs = Number(snapshot.roundStartTime || 0) * 1000;
-    const roundCloseMs = Number(snapshot.roundCloseTime || 0) * 1000;
-
-    let timeoutMs = 3000;
-
-    // If we should already be inside the round window but the snapshot still says betting is closed,
-    // keep polling quickly so the dashboard can flip out of "Get ready" as soon as the next read lands.
-    if (!snapshot.bettingOpen && roundStartMs > 0 && roundCloseMs > nowMs && nowMs >= roundStartMs) {
-      timeoutMs = 1000;
-    } else {
-      const nextMoments = [roundStartMs, roundCloseMs]
-        .filter((value) => value > nowMs + 250);
-
-      if (nextMoments.length) {
-        timeoutMs = Math.max(1000, Math.min(...nextMoments) - nowMs + 250);
-      }
-    }
-
-    const timeoutId = window.setTimeout(() => {
+    const intervalId = window.setInterval(() => {
       refreshSnapshot();
-      if (backendStatus === "ready") {
-        refreshBackendStatus();
-      }
-    }, timeoutMs);
+    }, 4000);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [backendStatus, snapshot.currentRound, snapshot.bettingOpen, snapshot.roundStartTime, snapshot.roundCloseTime]);
+    return () => window.clearInterval(intervalId);
+  }, [snapshot.currentRound, snapshot.roundStartTime, snapshot.roundCloseTime]);
 
   useEffect(() => {
     const previous = prevSnapshotRef.current;
@@ -1193,7 +1008,7 @@ export function useVoltSonic() {
       );
     }*/
 
-    if (previous.claimNet !== snapshot.claimNet && snapshot.claimNet !== "0.0000 $VOLT") {
+    if (previous.claimNet !== snapshot.claimNet && snapshot.claimNet !== "0.0000 ETH") {
       pushToast({
         type: "success",
         title: "Claim Available",
@@ -1218,12 +1033,6 @@ export function useVoltSonic() {
 
       if (!cancelled) setBetHistoryLoading(true);
       try {
-        try {
-          await postBackendJson("/api/v1/sync?max_blocks=200");
-        } catch (syncError) {
-          console.warn("Background bet sync failed", syncError);
-        }
-
         const [openBets, closedBets] = await Promise.all([
           fetchBackendJson(`/api/v1/bets/recent/open?user_address=${account}&limit=50`),
           fetchBackendJson(`/api/v1/bets/recent/closed?user_address=${account}&limit=50`),
@@ -1251,8 +1060,13 @@ export function useVoltSonic() {
 
         if (cancelled) return;
 
-        rawEntries.sort((a, b) => b.roundId - a.roundId);
-        setBetHistory(rawEntries);
+        setBetHistory((current) => {
+          const remoteTxHashes = new Set(rawEntries.map((bet) => bet.txHash.toLowerCase()));
+          const localOpenBets = current.filter((bet) =>
+            bet.result === "open" && !remoteTxHashes.has(bet.txHash.toLowerCase())
+          );
+          return [...rawEntries, ...localOpenBets].sort((a, b) => b.roundId - a.roundId);
+        });
         setBetHistoryLoading(false);
       } catch (error) {
         if (!cancelled) {
@@ -1266,93 +1080,7 @@ export function useVoltSonic() {
     return () => {
       cancelled = true;
     };
-  }, [account, backendStatus, snapshot.currentRound, snapshot.latestSettledRound, snapshotRefreshTick]);
-
-  useEffect(() => {
-    if (!hasRpcEndpoints() || !CHAINLINK_ETH_USD_FEED || !ethers.isAddress(CHAINLINK_ETH_USD_FEED)) {
-      setEthUsdStatus("missing_config");
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadPrice() {
-      try {
-        if (!cancelled) setEthUsdStatus("loading");
-        const [latestRoundData, decimals] = await Promise.all([
-          readContract({
-            address: CHAINLINK_ETH_USD_FEED,
-            abi: CHAINLINK_FEED_ABI,
-            method: "latestRoundData",
-            cacheKey: `chainlink:${CHAINLINK_ETH_USD_FEED.toLowerCase()}:latestRoundData`,
-            cacheTtlMs: 15_000,
-          }),
-          readContract({
-            address: CHAINLINK_ETH_USD_FEED,
-            abi: CHAINLINK_FEED_ABI,
-            method: "decimals",
-            cacheKey: `chainlink:${CHAINLINK_ETH_USD_FEED.toLowerCase()}:decimals`,
-            cacheTtlMs: 60 * 60 * 1000,
-          }),
-        ]);
-
-        if (cancelled) return;
-
-        const answer = Number(latestRoundData.answer);
-        const scale = 10 ** Number(decimals);
-        setEthUsdPrice(answer / scale);
-        setEthUsdStatus("ready");
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Chainlink ETH/USD fetch failed", error);
-          setEthUsdPrice(null);
-          setEthUsdStatus("error");
-          pushToast({
-            type: "warning",
-            title: "Price Feed Unavailable",
-            message: "ETH/USD conversion is temporarily unavailable.",
-            dedupeKey: "price-feed-error",
-          });
-        }
-      }
-    }
-
-    loadPrice();
-    return () => {
-      cancelled = true;
-    };
-  }, [priceRefreshTick]);
-
-  useEffect(() => {
-    const tokenAddress = tokenAddressRef.current || import.meta.env.VITE_TOKEN_ADDRESS || "";
-    if (!tokenAddress || !ethers.isAddress(tokenAddress)) {
-      setVoltPriceStatus("missing_config");
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadVoltPrice() {
-      try {
-        if (!cancelled) setVoltPriceStatus("loading");
-        const price = await fetchDexScreenerTokenPriceUsd(tokenAddress);
-        //if (cancelled) return;
-        setVoltPrice(price);
-        setVoltPriceStatus("ready");
-      } catch (error) {
-        if (!cancelled) {
-          console.error("DexScreener VOLT/USD fetch failed", error);
-          setVoltPrice(null);
-          setVoltPriceStatus("error");
-        }
-      }
-    }
-
-    loadVoltPrice();
-    return () => {
-      cancelled = true;
-    };
-  }, [priceRefreshTick]);
+  }, [account, backendStatus, snapshot.currentRound, snapshot.latestSettledRound, betHistoryRefreshTick]);
 
   useEffect(() => {
     setSnapshot((current) => ({
@@ -1502,111 +1230,136 @@ export function useVoltSonic() {
     }
   }, []);
 
-  async function connectWallet() {
-    if (!window.ethereum) {
-      notify("Install MetaMask or another injected wallet first.", "warning", "Wallet Required");
-      return;
+  async function connectWallet(connector) {
+    if (!connector) {
+      notify("No compatible wallet connector is available.", "warning", "Wallet Required");
+      return false;
     }
 
     try {
-      const nextProvider = new ethers.BrowserProvider(window.ethereum);
-      const accounts = await nextProvider.send("eth_requestAccounts", []);
-      triggerInteractionLoading(accounts[0] || "");
-      setAccount(accounts[0] || "");
+      if (isConnected && activeConnector?.uid === connector.uid) return true;
+      if (isConnected) await disconnectAsync();
+      const connection = await connectAsync({ connector });
+      if (connection.chainId !== ROBINHOOD_CHAIN_ID) {
+        await switchChainAsync({ chainId: ROBINHOOD_CHAIN_ID });
+      }
+      triggerInteractionLoading(connection.accounts[0] || "");
       notify(
-        accounts[0] ? `Connected ${shortAddress(accounts[0])}` : "Wallet connection cancelled.",
-        accounts[0] ? "success" : "warning",
-        accounts[0] ? "Wallet Connected" : "Wallet Cancelled"
+        connection.accounts[0] ? `Connected ${shortAddress(connection.accounts[0])}` : "Wallet connection cancelled.",
+        connection.accounts[0] ? "success" : "warning",
+        connection.accounts[0] ? "Wallet Connected" : "Wallet Cancelled"
       );
+      return Boolean(connection.accounts[0]);
     } catch (error) {
       notify(getReadableError(error), "error", "Wallet Error");
+      return false;
     }
   }
 
   async function switchWallet() {
-    if (!window.ethereum) {
-      notify("Install MetaMask or another injected wallet first.", "warning", "Wallet Required");
-      return;
-    }
+    return connectWallet();
+  }
 
+  async function disconnectWallet() {
     try {
-      const nextProvider = new ethers.BrowserProvider(window.ethereum);
-      await window.ethereum.request({
-        method: "wallet_requestPermissions",
-        params: [{ eth_accounts: {} }],
-      });
-      const accounts = await nextProvider.send("eth_accounts", []);
-      triggerInteractionLoading(accounts[0] || "");
-      setAccount(accounts[0] || "");
-      notify(
-        accounts[0] ? `Switched to ${shortAddress(accounts[0])}` : "No wallet selected.",
-        accounts[0] ? "info" : "warning",
-        accounts[0] ? "Wallet Switched" : "Wallet Selection"
-      );
+      await disconnectAsync();
+      return true;
     } catch (error) {
       notify(getReadableError(error), "error", "Wallet Error");
+      return false;
     }
   }
 
-  async function writeContract(runTx, pendingMessage, successMessage) {
-    if (!window.ethereum || !contract) {
+  async function writeContract(request, pendingMessage, successMessage, onConfirmed) {
+    if (!isConnected || !account || !publicClient) {
       notify("Connect your wallet and try again.", "warning", "Wallet Required");
       return { ok: false, error: "Connect your wallet and try again." };
     }
 
     try {
       triggerInteractionLoading();
-      const walletProvider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await walletProvider.getSigner();
-      const signedContract = contract.connect(signer);
+      if (chainId !== ROBINHOOD_CHAIN_ID) {
+        await switchChainAsync({ chainId: ROBINHOOD_CHAIN_ID });
+      }
       notify(pendingMessage, "info", "Transaction Submitted");
-      const tx = await runTx(signedContract, signer);
+      const hash = await writeContractAsync({
+        address: CONTRACT_ADDRESS,
+        abi: VOLTSONIC_VIEM_ABI,
+        chainId: ROBINHOOD_CHAIN_ID,
+        account,
+        ...request,
+      });
       pushToast({
         type: "info",
         title: "Waiting For Confirmation",
-        message: `Tx ${tx.hash.slice(0, 10)}... submitted.`,
-        dedupeKey: `tx-hash-${tx.hash}`,
+        message: `Tx ${hash.slice(0, 10)}... submitted.`,
+        dedupeKey: `tx-hash-${hash}`,
       });
-      const receipt = await tx.wait();
-      if (backendStatus === "ready" && receipt?.blockNumber) {
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt && request.functionName === "placeBet") {
+        const betEvent = receipt.logs
+          .filter((log) => log.address?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase())
+          .map((log) => {
+            try {
+              return decodeEventLog({
+                abi: VOLTSONIC_VIEM_ABI,
+                eventName: "BetPlaced",
+                data: log.data,
+                topics: log.topics,
+              });
+            } catch {
+              return null;
+            }
+          })
+          .find(Boolean);
+
+        if (betEvent) {
+          const [diceChoice, parityChoice, diceAmount, parityAmount] = request.args;
+          const timestamp = new Date().toISOString();
+          const confirmedBet = {
+            id: `${hash}-${Number(betEvent.args.roundId)}`,
+            status: "open",
+            txHash: hash,
+            roundId: Number(betEvent.args.roundId),
+            result: "open",
+            claimed: false,
+            settled: false,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            diceChoice: Number(diceChoice),
+            parityChoice: parityChoice ? "Even" : "Odd",
+            diceAmount: BigInt(diceAmount),
+            parityAmount: BigInt(parityAmount),
+            betOnDice: BigInt(diceAmount) > 0n,
+            betOnParity: BigInt(parityAmount) > 0n,
+            diceResult: null,
+            parityResult: "--",
+            wonDice: false,
+            wonParity: false,
+          };
+          setBetHistory((current) => [
+            confirmedBet,
+            ...current.filter((bet) => bet.txHash.toLowerCase() !== hash.toLowerCase()),
+          ]);
+        }
+      }
+      if (receipt && onConfirmed) {
         try {
-          await postBackendJson(`/api/v1/sync?from_block=${receipt.blockNumber}&max_blocks=1`);
-        } catch (syncError) {
-          console.warn("Backend sync after transaction failed", syncError);
+          await onConfirmed({ receipt, account, backendAvailable: backendStatus === "ready" });
+        } catch (confirmationError) {
+          console.warn("Could not process confirmed transaction:", confirmationError);
         }
       }
       notify(successMessage, "success", "Transaction Confirmed");
       refreshBackendStatus();
       refreshSnapshot();
+      setBetHistoryRefreshTick((current) => current + 1);
       return { ok: true, error: null };
     } catch (error) {
       const errorMessage = getReadableError(error);
       notify(errorMessage, "error", "Transaction Failed");
       return { ok: false, error: errorMessage };
     }
-  }
-
-  async function approveVoltIfNeeded(signer, amount) {
-    const signedContract = contract.connect(signer);
-    const tokenAddress = await signedContract.voltToken();
-    const tokenContract = new ethers.Contract(tokenAddress, VOLT_ERC20_ABI, signer);
-    const ownerAddress = await signer.getAddress();
-    const allowance = await tokenContract.allowance(ownerAddress, CONTRACT_ADDRESS);
-
-    if (allowance >= amount) {
-      return;
-    }
-
-    notify("Approving VOLT spend...", "info", "Approval Required");
-    const approveTx = await tokenContract.approve(CONTRACT_ADDRESS, amount);
-    pushToast({
-      type: "info",
-      title: "Waiting For Approval",
-      message: `Tx ${approveTx.hash.slice(0, 10)}... submitted.`,
-      dedupeKey: `approve-${approveTx.hash}`,
-    });
-    await approveTx.wait();
-    notify("VOLT approval confirmed.", "success", "Approval Confirmed");
   }
 
   return {
@@ -1626,8 +1379,6 @@ export function useVoltSonic() {
     roundCountdownLabel,
     ethUsdPrice,
     ethUsdStatus,
-    voltPrice,
-    voltPriceStatus,
     backendStatus,
     toasts,
     resultModal,
@@ -1635,8 +1386,9 @@ export function useVoltSonic() {
     dismissResultModal,
     connectWallet,
     switchWallet,
+    disconnectWallet,
+    connectors,
     refreshSnapshot,
-    approveVoltIfNeeded,
     writeContract,
   };
 }

@@ -13,7 +13,7 @@ function parseRawTokenAmount(value) {
 
 function formatBetAmount(bet) {
   const total = parseRawTokenAmount((BigInt(bet.diceAmount || 0n) + BigInt(bet.parityAmount || 0n)).toString());
-  return `${total.toFixed(2)} VOLT`;
+  return `${total.toFixed(4)} ETH`;
 }
 
 function formatBetPick(bet) {
@@ -60,7 +60,7 @@ function getOutcomeClasses(result) {
   return "border-secondary/30 bg-secondary/10 text-secondary";
 }
 
-function BetSection({ title, bets, emptyLabel, voltPrice }) {
+function BetSection({ title, bets, emptyLabel }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -99,11 +99,6 @@ function BetSection({ title, bets, emptyLabel, voltPrice }) {
               <div className="mt-2 flex items-center justify-between gap-3 text-[11px] font-mono">
                 <div className="flex flex-col">
                   <span className="text-primary">{formatBetAmount(bet)}</span>
-                  {voltPrice && (
-                    <span className="text-muted-foreground text-[10px]">
-                      ≈ ${(parseRawTokenAmount((BigInt(bet.diceAmount || 0n) + BigInt(bet.parityAmount || 0n)).toString()) * voltPrice).toFixed(2)}
-                    </span>
-                  )}
                 </div>
                 <span className="text-muted-foreground">
                   {formatRelativeTime(bet.updatedAt || bet.createdAt)}
@@ -121,7 +116,7 @@ function BetSection({ title, bets, emptyLabel, voltPrice }) {
   );
 }
 
-export function BetHistoryPanel({ bets = [], loading = false, connected = false, voltPrice }) {
+export function BetHistoryPanel({ bets = [], loading = false, connected = false }) {
   const { openBets, closedBets } = useMemo(() => {
     const sortedBets = [...bets].sort((left, right) => {
       const leftTimestamp = Date.parse(String(left.updatedAt || left.createdAt || "")) || 0;
@@ -200,13 +195,11 @@ export function BetHistoryPanel({ bets = [], loading = false, connected = false,
             title="OPEN BETS"
             bets={openBets}
             emptyLabel="No open bets right now."
-            voltPrice={voltPrice}
           />
           <BetSection
             title="CLOSED BETS"
             bets={closedBets}
             emptyLabel="No closed bets yet."
-            voltPrice={voltPrice}
           />
         </div>
       )}

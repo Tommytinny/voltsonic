@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
+import { decodeEventLog } from "viem";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Wallet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -13,12 +14,15 @@ import { BigWinBanner } from "@/components/game/BigWinBanner";
 import { RoundHistoryPanel } from "@/components/game/RoundHistoryPanel";
 import { QuickBetFlow } from "@/components/game/QuickBetFlow";
 import { HowToPlayPanel } from "@/components/game/HowToPlayPanel";
-import { VOLTSONIC_ABI } from "@/lib/contract.js";
+import { WalletConnectModal } from "@/components/game/WalletConnectModal";
+import { VOLTSONIC_ABI, VOLTSONIC_VIEM_ABI } from "@/lib/contract.js";
+import { SHOW_BACKEND_TOASTS } from "@/lib/featureFlags";
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
 const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
-const BASE_RPC_URL = import.meta.env.VITE_BASE_RPC_URL || "";
-const staticProvider = new ethers.JsonRpcProvider(BASE_RPC_URL);
+const ROBINHOOD_RPC_URL = import.meta.env.VITE_ROBINHOOD_RPC_URL || "https://rpc.testnet.chain.robinhood.com";
+const ROBINHOOD_CHAIN_ID = Number(import.meta.env.VITE_ROBINHOOD_CHAIN_ID || 46630);
+const staticProvider = new ethers.JsonRpcProvider(ROBINHOOD_RPC_URL, ROBINHOOD_CHAIN_ID);
 
 function parseRoundNumber(value) {
   return Number(String(value || "").replace("#", "")) || 0;
@@ -41,19 +45,6 @@ function fetchBackendJson(path) {
   return fetch(`${BACKEND_API_URL}${path}`).then(async (response) => {
     if (!response.ok) {
       throw new Error(`Backend request failed: ${response.status}`);
-    }
-    return response.json();
-  });
-}
-
-function postBackendJson(path, body) {
-  return fetch(`${BACKEND_API_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }).then(async (response) => {
-    if (!response.ok) {
-      throw new Error(`Backend POST failed: ${response.status}`);
     }
     return response.json();
   });
@@ -349,17 +340,21 @@ async function fetchChainTruth(roundId, contractAddress, abi) {
   if (snapshotLoading || !roundId) {
     phase = "loading";
   } 
+  else if (roundStartMs > now) {
+    phase = "starting";
+    phaseEndTime = roundStartMs;
+  }
+  else if (roundCloseMs > now) {
+    phase = snapshot.bettingOpen ? "betting" : "locked";
+    phaseEndTime = roundCloseMs;
+  }
   else if (isWaitingForBlockchain) {
     phase = "resolving";
     phaseEndTime = now + 5000; 
   }
   else if (isSettled) {
     phase = "starting"; 
-    phaseEndTime = roundStartMs > now ? roundStartMs : now + 5000;
-  } 
-  else if (now < roundCloseMs) {
-    phase = snapshot.bettingOpen ? "betting" : "locked";
-    phaseEndTime = roundCloseMs;
+    phaseEndTime = now + 5000;
   } 
   else {
     phase = "resolving";
@@ -504,32 +499,31 @@ export default function Game() {
     backendStatus,
     account,
     connectWallet,
-    switchWallet,
+    connectors,
     writeContract,
     roundCountdown,
     roundCountdownLabel,
-    voltPrice,
   } = useVoltSonic();
   const [backendRounds, setBackendRounds] = useState([]);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const previousBackendStatusRef = useRef(backendStatus);
   const hasLoadedBackendDataRef = useRef(false);
-  const postedRoundIdRef = useRef(null);
   const [onChainData, setOnChainData] = useState(null);
 
   const staticProvider = useMemo(() => {
 
   // Use a reliable Public RPC for the background truth check
 
-  return new ethers.JsonRpcProvider(BASE_RPC_URL);
+  return new ethers.JsonRpcProvider(ROBINHOOD_RPC_URL, ROBINHOOD_CHAIN_ID);
 
 }, []);
 
   
   useEffect(() => {
     if (previousBackendStatusRef.current !== backendStatus) {
-      if (backendStatus === "ready") {
+      if (SHOW_BACKEND_TOASTS && backendStatus === "ready") {
         toast.success("Dashboard is synced with live data.");
-      } else if (backendStatus === "offline") {
+      } else if (SHOW_BACKEND_TOASTS && backendStatus === "offline") {
         toast.warning("Server is ofline. Falling back where possible.");
       }
       previousBackendStatusRef.current = backendStatus;
@@ -542,10 +536,11 @@ export default function Game() {
     }
 
     try {
-      const rounds = await fetchBackendJson("/api/v1/rounds?limit=10");
+      const rounds = await fetchBackendJson("/api/v1/rounds?limit=20");
       setBackendRounds(
         rounds
           .filter((round) => round.settled && round.dice_result)
+          .slice(0, 10)
           .map(mapHistoryRound)
       );
     } catch (error) {
@@ -630,11 +625,6 @@ const latestResult = useMemo(() => {
     [latestResult, roundCountdownLabel, snapshot, snapshotLoading]
   );*/
 
-  const provider = useMemo(() => {
-    if (window.ethereum) return new ethers.BrowserProvider(window.ethereum);
-    return null;
-  }, []);
-
   // UPDATE the round useMemo to include onChainData
   const round = useMemo(
     () => buildRoundState(snapshot, roundCountdownLabel, latestResult, snapshotLoading, onChainData),
@@ -659,7 +649,7 @@ const latestResult = useMemo(() => {
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [round.phase, round.roundId, provider, onChainData]);
+  }, [round.phase, round.roundId, onChainData]);
 
 
   const getDiceMultiplier = (pick) => {
@@ -671,11 +661,6 @@ const latestResult = useMemo(() => {
   const walletBalance = useMemo(
     () => parseFormattedAmount(snapshot.credits),
     [snapshot.credits]
-  );
-
-  const spendingLimit = useMemo(
-    () => parseFormattedAmount(snapshot.tokenAllowance),
-    [snapshot.tokenAllowance]
   );
 
   const roundHistory = useMemo(() => {
@@ -710,42 +695,6 @@ const latestResult = useMemo(() => {
   }, [round.roundId, onChainData]);
 
   useEffect(() => {
-    if (!resultToShow || backendStatus !== "ready") {
-      return;
-    }
-    if (postedRoundIdRef.current === resultToShow.roundId) {
-      return;
-    }
-
-    let cancelled = false;
-
-    async function pushRoundResult() {
-      try {
-        await postBackendJson("/api/v1/rounds", {
-          round_id: resultToShow.roundId,
-          settled: true,
-          randomness_requested: true,
-          randomness_fulfilled: true,
-          dice_result: resultToShow.diceResult,
-          parity_result: resultToShow.parityResult === "even",
-        });
-
-        if (!cancelled) {
-          postedRoundIdRef.current = resultToShow.roundId;
-          loadBackendData();
-        }
-      } catch (error) {
-        console.warn("Failed to push round result to backend:", error);
-      }
-    }
-
-    pushRoundResult();
-    return () => {
-      cancelled = true;
-    };
-  }, [backendStatus, loadBackendData, resultToShow]);
-
-  useEffect(() => {
     if (round.phase === "starting" && roundCountdownLabel === "Starts in" && roundCountdown === "00:01") {
       window.location.reload();
     }
@@ -765,31 +714,67 @@ const latestResult = useMemo(() => {
       toast.warning("Bet rejected: amount is higher than your wallet balance. Fund the wallet or lower the bet.");
       return false;
     }
-    if (amount > spendingLimit) {
-      toast.warning("Bet rejected: amount is above your spending limit. Increase the limit in Wallet first.");
+    const minBetEth = parseFormattedAmount(snapshot.minBet);
+    if (amount < minBetEth) {
+      toast.warning(`Minimum bet is ${minBetEth.toFixed(4)} ETH.`);
       return false;
-    }
-
-    const minBetUsd = 5;
-    if (voltPrice > 0) {
-      const minBetVolt = minBetUsd / voltPrice;
-      if (amount < minBetVolt) {
-        toast.warning(`Minimum bet is $${minBetUsd} USD (≈ ${minBetVolt.toFixed(4)} VOLT).`);
-        return false;
-      }
     }
 
     toast.info(`Submitting dice bet on ${dicePick}...`);
 
+    if (parsedAmount <= 0n) {
+      toast.error("Enter an ETH amount.");
+      return false;
+    }
+
     const result = await writeContract(
-      async (contract) => {
-        if (parsedAmount <= 0n) {
-          throw new Error("Enter a VOLT amount");
-        }
-        return contract.placeBet(BigInt(dicePick), true, parsedAmount, 0n);
+      {
+        functionName: "placeBet",
+        args: [BigInt(dicePick), true, parsedAmount, 0n],
+        value: parsedAmount,
       },
       "Submitting dice bet...",
-      "Dice bet placed."
+      "Dice bet placed.",
+      async ({ account: userAddress, receipt, backendAvailable }) => {
+        if (!backendAvailable) return;
+        const betLog = receipt.logs.map((log) => {
+            try {
+              return decodeEventLog({
+                abi: VOLTSONIC_VIEM_ABI,
+                eventName: "BetPlaced",
+                data: log.data,
+                topics: log.topics,
+              });
+            } catch {
+              return null;
+            }
+          }).find(Boolean);
+        if (!betLog) throw new Error("BetPlaced event missing from confirmation");
+        await fetch(`${BACKEND_API_URL}/api/v1/bets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            round_id: Number(betLog.args.roundId),
+            user_address: userAddress,
+            tx_hash: receipt.transactionHash,
+            dice_choice: Number(dicePick),
+            parity_choice: null,
+            dice_amount: parsedAmount.toString(),
+            parity_amount: "0",
+            bet_on_dice: true,
+            bet_on_parity: false,
+            block_number: Number(receipt.blockNumber),
+          }),
+        }).then(async (response) => {
+          if (!response.ok) {
+            const payload = await response.json().catch(() => null);
+            throw new Error(payload?.detail
+              ? `Bet history save failed: ${JSON.stringify(payload.detail)}`
+              : `Bet history save failed: ${response.status}`);
+          }
+          return response.json();
+        });
+      }
     );
 
     if (result.ok) {
@@ -822,7 +807,7 @@ const latestResult = useMemo(() => {
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={account ? switchWallet : connectWallet}
+            onClick={() => setWalletModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-muted text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
           >
             <Wallet className="w-3.5 h-3.5" />
@@ -831,7 +816,7 @@ const latestResult = useMemo(() => {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-5 space-y-4">
+      <main className="mx-auto max-w-7xl space-y-4 px-4 py-5">
         <div className="flex items-center justify-between">
           <div>
             {snapshotLoading ? (
@@ -849,8 +834,10 @@ const latestResult = useMemo(() => {
           <RoundTimer round={round} />
         </div>
 
-        <JackpotDisplay jackpotPool={round.jackpotPool} streak={0} loading={snapshotLoading} voltPrice={voltPrice} />
+        <JackpotDisplay jackpotPool={round.jackpotPool} streak={0} loading={snapshotLoading} />
 
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
+          <div className="min-w-0 space-y-4">
         {snapshotLoading ? (
           <DashboardHeroSkeleton />
         ) : (
@@ -891,7 +878,7 @@ const latestResult = useMemo(() => {
                     getDiceMultiplier={getDiceMultiplier}
                     onSubmit={handleQuickBet}
                     disabled={!isBettingOpen || !account}
-                    voltPrice={voltPrice}
+                    minimumBet={parseFormattedAmount(snapshot.minBet)}
                   />
                 </motion.div>
               )}
@@ -932,14 +919,25 @@ const latestResult = useMemo(() => {
 
         <HowToPlayPanel />
 
-        <BetHistoryPanel bets={betHistory} loading={snapshotLoading || betHistoryLoading} connected={Boolean(account)} voltPrice={voltPrice} />
-        <RoundHistoryPanel history={roundHistory} loading={snapshotLoading && roundHistory.length === 0} />
+          </div>
+
+          <aside className="min-w-0 space-y-4 lg:sticky lg:top-4">
+            <BetHistoryPanel bets={betHistory} loading={betHistoryLoading} connected={Boolean(account)} />
+            <RoundHistoryPanel history={roundHistory} loading={snapshotLoading && roundHistory.length === 0} />
+          </aside>
+        </div>
 
         <div className="text-center text-[10px] text-muted-foreground font-mono tracking-wider space-y-0.5">
           <div>Dice pools are live now. Parity and jackpot rewards are coming soon.</div>
           <div>Backend indexed • Contract-backed round state</div>
         </div>
       </main>
+      <WalletConnectModal
+        open={walletModalOpen}
+        connectors={connectors}
+        onConnect={connectWallet}
+        onClose={() => setWalletModalOpen(false)}
+      />
     </div>
   );
 }

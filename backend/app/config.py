@@ -35,8 +35,7 @@ class Settings(BaseSettings):
     sync_database_url: str = ""
     voltsonic_rpc_urls: str = ""
     voltsonic_contract_address: str = ""
-    indexer_start_block: int = 0
-    indexer_block_chunk_size: int = 10
+    voltsonic_private_key: str = ""
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"])
     settlement_check_interval: int = 10  # Check for due rounds every N seconds
 

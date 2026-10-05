@@ -20,10 +20,7 @@ export const wagmiConfig = createConfig({
     coinbaseWallet({ appName: "VoltSonic" }),
     injected(),
     ...(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
-      ? [walletConnect({
-          projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-          showQrModal: true,
-        })]
+      ? [walletConnect({ projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID })]
       : []),
   ],
   transports: {

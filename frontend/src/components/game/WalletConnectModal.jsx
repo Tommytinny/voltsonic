@@ -98,12 +98,6 @@ export function WalletConnectModal({ open, connectors, onConnect, onClose }) {
           {uniqueConnectors.length === 0 && (
             <p className="px-2 py-4 text-sm text-muted-foreground">No wallet providers are available in this browser.</p>
           )}
-          {!connectors.some((connector) => connector.id.toLowerCase().includes("walletconnect")) && (
-            <p className="border-t border-border px-2 pt-3 text-xs leading-relaxed text-muted-foreground">
-              Connecting from a mobile browser requires WalletConnect. Configure
-              VITE_WALLETCONNECT_PROJECT_ID, or open this site in your wallet app.
-            </p>
-          )}
         </div>
       </section>
     </div>

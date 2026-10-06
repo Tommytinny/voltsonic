@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
 import { decodeEventLog } from "viem";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet } from "lucide-react";
+import { Copy, Wallet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useVoltSonic, shortAddress, parseTokenAmount } from "./Index.jsx";
@@ -931,8 +931,23 @@ const latestResult = useMemo(() => {
         </div>
       </main>
       <footer className="border-t border-border bg-background/80 px-4 py-3 text-center text-[10px] font-mono text-muted-foreground backdrop-blur-sm">
-        <span className="mr-2 uppercase tracking-[0.2em] text-muted-foreground/80">Contract</span>
-        <span className="break-all text-foreground">{CONTRACT_ADDRESS ? shortAddress(CONTRACT_ADDRESS) : "Not configured"}</span>
+        <div className="flex items-center justify-center gap-2">
+          <span className="uppercase tracking-[0.2em] text-muted-foreground/80">Contract</span>
+          <span className="break-all text-foreground">{CONTRACT_ADDRESS ? shortAddress(CONTRACT_ADDRESS) : "Not configured"}</span>
+          {CONTRACT_ADDRESS ? (
+            <button
+              type="button"
+              aria-label="Copy contract address"
+              onClick={async () => {
+                await navigator.clipboard.writeText(CONTRACT_ADDRESS);
+                toast.success("Contract address copied.");
+              }}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
       </footer>
       <WalletConnectModal
         open={walletModalOpen}

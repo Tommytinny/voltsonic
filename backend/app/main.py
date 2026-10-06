@@ -19,9 +19,9 @@ settlement_task: asyncio.Task | None = None
 async def lifespan(_: FastAPI):
     # Startup
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-        #await connection.run_sync(Base.metadata.drop_all)
-        #print("Dropped all tables")
+        #await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(Base.metadata.drop_all)
+        print("Dropped all tables")
     
     # Start settlement loop
     global settlement_task

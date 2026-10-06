@@ -930,6 +930,10 @@ const latestResult = useMemo(() => {
           <div>Backend indexed • Contract-backed round state</div>
         </div>
       </main>
+      <footer className="border-t border-border bg-background/80 px-4 py-3 text-center text-[10px] font-mono text-muted-foreground backdrop-blur-sm">
+        <span className="mr-2 uppercase tracking-[0.2em] text-muted-foreground/80">Contract</span>
+        <span className="break-all text-foreground">{CONTRACT_ADDRESS ? shortAddress(CONTRACT_ADDRESS) : "Not configured"}</span>
+      </footer>
       <WalletConnectModal
         open={walletModalOpen}
         connectors={connectors}

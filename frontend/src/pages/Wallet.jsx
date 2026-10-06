@@ -17,6 +17,7 @@ function parseFormattedAmount(value) {
   return match ? Number(match[0]) : 0;
 }
 
+
 function parseRawTokenAmount(value) {
   try {
     return Number(ethers.formatEther(BigInt(String(value || "0"))));

@@ -1,6 +1,6 @@
-# Deploy VoltSonic To Robinhood Chain Testnet
+# Deploy Voltron To Robinhood Chain Testnet
 
-This deploys the standalone VoltSonic contract directly with `forge create`. It does not deploy a proxy, configure Chainlink, or use an upgrade script.
+This deploys the standalone Voltron contract directly with `forge create`. It does not deploy a proxy, configure Chainlink, or use an upgrade script.
 
 ## 1. Prerequisites
 
@@ -17,7 +17,7 @@ Get testnet ETH from the faucet currently listed in the official Robinhood Chain
 
 ## 2. Build And Test
 
-From the `voltsonic` directory:
+From the `voltron` directory:
 
 ```sh
 forge build
@@ -60,17 +60,24 @@ cast chain-id --rpc-url "$ROBINHOOD_TESTNET_RPC_URL"
 
 The command should return `46630`. The contract accepts native ETH; no ERC-20 token deployment or address is required.
 
-## 5. Deploy VoltSonic
+## 5. Deploy Voltron
 
 The constructor takes the owner address. `--broadcast` comes before the variadic constructor arguments:
 
 ```sh
-forge create src/voltsonic.sol:VoltSonic \
+forge create src/voltron.sol:Voltron \
   --rpc-url "$ROBINHOOD_TESTNET_RPC_URL" \
-  --chain-id 46630 \
+  --chain-id 4663 \
   --private-key "$PRIVATE_KEY" \
   --broadcast \
   --constructor-args "$OWNER_ADDRESS"
+
+forge verify-contract 0x0C89c1D0D91F0E1A65432ad25e4061D0e2f0DBd3 \
+  src/voltron.sol:Voltron \
+  --chain-id 4663 \
+  --rpc-url "$ROBINHOOD_TESTNET_RPC_URL" \
+  --verifier blockscout \
+  --verifier-url https://robinhoodchain.blockscout.com/api/
 ```
 
 Save the `Deployed to:` address printed by Foundry. This is the single contract address used by the frontend and backend.

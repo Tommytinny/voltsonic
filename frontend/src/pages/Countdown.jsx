@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Rocket, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import voltronLogo from "./logo.png";
 
 const LAUNCH_TARGET = String(import.meta.env.VITE_LAUNCH_HOUR || "15").trim();
 
@@ -58,10 +59,10 @@ export default function Countdown() {
     <div className="min-h-screen bg-background text-foreground px-4 py-8">
       <main className="mx-auto max-w-3xl rounded-3xl border border-border bg-card p-10 shadow-[0_0_60px_rgba(8,145,178,0.12)]">
         <div className="flex items-center gap-3 text-primary">
-          <Rocket className="h-8 w-8" />
           <div>
+            <img src={voltronLogo} alt="Voltron" className="mb-5 h-auto w-full max-w-xs object-contain" />
             <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground">Launching soon</p>
-            <h1 className="mt-2 text-4xl font-black sm:text-5xl">VoltSonic is going live</h1>
+            <h1 className="mt-2 text-4xl font-black sm:text-5xl">Voltron is going live</h1>
           </div>
         </div>
 

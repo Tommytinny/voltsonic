@@ -3,6 +3,7 @@ import { LoaderCircle, Wallet, X } from "lucide-react";
 import {
   WalletCoinbase,
   WalletMetamask,
+  WalletRainbow,
   WalletWalletConnect,
   WalletPhantom,
   WalletRabby,
@@ -13,6 +14,7 @@ function getConnectorLabel(connector) {
   if (id.includes("metamask")) return "MetaMask";
   if (id.includes("coinbase")) return "Coinbase Wallet";
   if (id.includes("walletconnect")) return "WalletConnect";
+  if (id.includes("rainbow")) return "Rainbow";
   if (id.includes("phantom")) return "Phantom";
   if (id.includes("rabby")) return "Rabby";
   if (connector.name.toLowerCase() === "injected") return "Browser Wallet";
@@ -26,6 +28,7 @@ function ProviderIcon({ connector }) {
   if (id.includes("metamask")) return <WalletMetamask {...iconProps} />;
   if (id.includes("coinbase")) return <WalletCoinbase {...iconProps} />;
   if (id.includes("walletconnect")) return <WalletWalletConnect size={30} variant="background" />;
+  if (id.includes("rainbow")) return <WalletRainbow {...iconProps} />;
   if (id.includes("phantom")) return <WalletPhantom {...iconProps} />;
   if (id.includes("rabby")) return <WalletRabby {...iconProps} />;
   return <Wallet className="h-4 w-4" />;

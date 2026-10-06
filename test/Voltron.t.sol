@@ -2,10 +2,10 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {VoltSonic} from "../src/voltsonic.sol";
+import {Voltron} from "../src/voltron.sol";
 
-contract VoltSonicTest is Test {
-    VoltSonic internal game;
+contract VoltronTest is Test {
+    Voltron internal game;
 
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
@@ -16,12 +16,12 @@ contract VoltSonicTest is Test {
         vm.deal(address(this), 100 ether);
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
-        game = new VoltSonic(address(this));
+        game = new Voltron(address(this));
     }
 
     function testInitializeAllowsCustomOwner() public {
         address customOwner = makeAddr("customOwner");
-        VoltSonic customOwnedGame = new VoltSonic(customOwner);
+        Voltron customOwnedGame = new Voltron(customOwner);
         assertEq(customOwnedGame.owner(), customOwner);
     }
 

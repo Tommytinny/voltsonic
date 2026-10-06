@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
 import { decodeEventLog } from "viem";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useVoltSonic, shortAddress, parseTokenAmount } from "./Index.jsx";
@@ -17,6 +17,7 @@ import { HowToPlayPanel } from "@/components/game/HowToPlayPanel";
 import { WalletConnectModal } from "@/components/game/WalletConnectModal";
 import { VOLTSONIC_ABI, VOLTSONIC_VIEM_ABI } from "@/lib/contract.js";
 import { SHOW_BACKEND_TOASTS } from "@/lib/featureFlags";
+import voltronLogo from "./logo.png";
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
 const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
@@ -792,10 +793,7 @@ const latestResult = useMemo(() => {
 
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" />
-          <span className="font-black text-lg tracking-tight text-foreground">
-            VOLT<span className="text-primary">SONIC</span>
-          </span>
+          <img src={voltronLogo} alt="Voltron" className="h-9 w-32 object-contain" />
         </div>
         <div className="flex items-center gap-2">
           <motion.button

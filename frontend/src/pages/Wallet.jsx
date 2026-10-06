@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ethers } from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Shield, Gift, ArrowUpRight, ArrowDownLeft, Settings, Check, Copy, ExternalLink, Wallet as WalletIcon, LogOut } from "lucide-react";
+import { Shield, Gift, ArrowUpRight, ArrowDownLeft, Settings, Check, Copy, ExternalLink, Wallet as WalletIcon, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 import { useVoltSonic, shortAddress } from "./Index.jsx";
 import { WalletConnectModal } from "@/components/game/WalletConnectModal";
 import { SHOW_BACKEND_TOASTS } from "@/lib/featureFlags";
+import voltronLogo from "./logo.png";
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_VOLTSONIC_CONTRACT_ADDRESS || "";
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://127.0.0.1:8000";
@@ -214,10 +215,7 @@ export default function Wallet() {
     <div className="min-h-screen bg-background scanline">
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" />
-          <span className="font-black text-lg tracking-tight text-foreground">
-            VOLT<span className="text-primary">SONIC</span>
-          </span>
+          <img src={voltronLogo} alt="Voltron" className="h-9 w-32 object-contain" />
         </div>
         <div className="flex items-center gap-2">
           <motion.button

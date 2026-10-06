@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-contract VoltSonic {
+contract Voltron {
     
     // --- State Variables ---
     uint256 public currentRid;
     uint256 public jackpotBalance; 
     uint256 public houseFeePercent; 
     uint256 public jackpotSeedPercent; 
-    uint256 public minBet; 
+    uint256 public minBet;
     uint256 public roundDuration;
     uint256 public intermissionDuration;
     uint256 public totalEthContributed;

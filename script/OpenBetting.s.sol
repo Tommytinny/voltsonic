@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {VoltSonic} from "../src/voltsonic.sol";
+import {Voltron} from "../src/voltron.sol";
 
 contract OpenBetting is Script {
     function run() external {
@@ -11,7 +11,7 @@ contract OpenBetting is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        VoltSonic(contractAddress).setBettingOpen(true);
+        Voltron(contractAddress).setBettingOpen(true);
 
         vm.stopBroadcast();
 

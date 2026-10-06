@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {VoltSonic} from "../src/voltsonic.sol";
+import {Voltron} from "../src/voltron.sol";
 
 contract AcceptOwnership is Script {
     function run() external {
@@ -12,7 +12,7 @@ contract AcceptOwnership is Script {
 
         vm.startBroadcast(pendingOwnerPrivateKey);
 
-        VoltSonic(contractAddress).acceptOwnership();
+        Voltron(contractAddress).acceptOwnership();
 
         vm.stopBroadcast();
 

@@ -2,22 +2,22 @@
 pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {VoltSonic} from "../src/voltsonic.sol";
+import {Voltron} from "../src/voltron.sol";
 
-contract DeployVoltSonic is Script {
+contract DeployVoltron is Script {
     function run() external returns (address contractAddress) {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address ownerAddress = vm.envOr("OWNER_ADDRESS", vm.addr(deployerPrivateKey));
 
         vm.startBroadcast(deployerPrivateKey);
 
-        VoltSonic game = new VoltSonic(ownerAddress);
+        Voltron game = new Voltron(ownerAddress);
 
         vm.stopBroadcast();
 
         contractAddress = address(game);
 
-        console2.log("VoltSonic deployed at:", contractAddress);
-        console2.log("VoltSonic owner set to:", ownerAddress);
+        console2.log("Voltron deployed at:", contractAddress);
+        console2.log("Voltron owner set to:", ownerAddress);
     }
 }

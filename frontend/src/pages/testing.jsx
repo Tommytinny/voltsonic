@@ -79,7 +79,7 @@ export default function Test() {
 
   return (
     <div style={{ padding: 20, fontFamily: "Arial" }}>
-      <h2>VoltSonic Contract Test</h2>
+      <h2>Voltron Contract Test</h2>
 
       {error && <p style={{ color: "red" }}>{error}</p>}
 

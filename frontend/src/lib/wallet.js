@@ -33,6 +33,7 @@ const runtime = globalRuntime[runtimeKey] || (() => {
         },
       },
     }),
+    injected({ shimDisconnect: true }),
     ...(walletConnectProjectId
       ? [walletConnect({ projectId: walletConnectProjectId, showQrModal: true })]
       : []),
